@@ -6,7 +6,8 @@ $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $runtimeZip = Join-Path $packageRoot 'LineChatSummary.DbRuntime.zip'
 $exePath = Join-Path $packageRoot 'LineChatSummary.exe'
 $distExe = Join-Path $outputsRoot 'LineChatSummary.exe'
-$sourceZip = Join-Path $outputsRoot 'LineChatSummary-2.5.2.zip'
+$distSetupExe = Join-Path $outputsRoot 'LineChatSummary-Setup.exe'
+$sourceZip = Join-Path $outputsRoot 'LineChatSummary-2.5.3.zip'
 
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw "找不到 .NET Framework C# 編譯器：$compiler"
@@ -53,7 +54,32 @@ finally {
 }
 
 Copy-Item -LiteralPath $exePath -Destination $distExe -Force
+
+$setupArguments = @(
+    '/nologo',
+    '/target:winexe',
+    '/platform:x64',
+    '/optimize+',
+    '/out:..\LineChatSummary-Setup.exe',
+    '/reference:System.Windows.Forms.dll',
+    '/reference:System.Drawing.dll',
+    '/reference:System.IO.Compression.dll',
+    '/reference:System.IO.Compression.FileSystem.dll',
+    '/resource:LineChatSummary.exe,LineChatSummary.App',
+    'SetupLauncher.cs'
+)
+
+Push-Location $packageRoot
+try {
+    & $compiler @setupArguments
+    if ($LASTEXITCODE -ne 0) { throw "安裝程式編譯失敗，csc.exe 結束碼：$LASTEXITCODE" }
+}
+finally {
+    Pop-Location
+}
+
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $sourceZip -Force -CompressionLevel Optimal
 
 Write-Output "EXE: $distExe"
+Write-Output "一鍵安裝程式: $distSetupExe"
 Write-Output "維護套件: $sourceZip"

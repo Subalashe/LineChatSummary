@@ -8,8 +8,8 @@ const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
 const lineDb = require('./line-db');
 
-const PORT = Number(process.env.LINE_CHAT_SUMMARY_PORT || 48744);
-const APP_VERSION = '2.5.2';
+const PORT = Number(process.env.LINE_CHAT_SUMMARY_PORT || 48745);
+const APP_VERSION = '2.5.3';
 const PROFILE = process.env.USERPROFILE || os.homedir();
 const CODEX_HOME = process.env.CODEX_HOME || path.join(PROFILE, '.codex');
 const SCRIPT_PATH = path.join(__dirname, 'LineChatSummary.ps1');

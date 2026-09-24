@@ -11,8 +11,8 @@ using System.Windows.Forms;
 
 internal static class Launcher
 {
-    private const int Port = 48744;
-    private const string AppUrl = "http://127.0.0.1:48744/";
+    private const int Port = 48745;
+    private const string AppUrl = "http://127.0.0.1:48745/";
     private const string RuntimeVersion = "better-sqlite3-multiple-ciphers@13.0.3";
 
     [STAThread]
@@ -146,6 +146,10 @@ internal static class Launcher
 
     private static string FindCompatibleNode(string fileName)
     {
+        string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime", "node", fileName);
+        if (File.Exists(bundled) && IsCompatibleNode(bundled))
+            return bundled;
+
         string pathValue = Environment.GetEnvironmentVariable("PATH") ?? "";
         HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string folder in pathValue.Split(Path.PathSeparator))
@@ -166,7 +170,7 @@ internal static class Launcher
         {
             ProcessStartInfo info = new ProcessStartInfo();
             info.FileName = executable;
-            info.Arguments = "--version";
+            info.Arguments = "-p \"process.versions.node + ' ' + process.platform + ' ' + process.arch\"";
             info.UseShellExecute = false;
             info.CreateNoWindow = true;
             info.WindowStyle = ProcessWindowStyle.Hidden;
@@ -179,9 +183,10 @@ internal static class Launcher
                     if (process != null) process.Kill();
                     return false;
                 }
-                string version = process.StandardOutput.ReadToEnd().Trim().TrimStart('v');
+                string[] fields = process.StandardOutput.ReadToEnd().Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                 int major;
-                return Int32.TryParse(version.Split('.')[0], out major) && major >= 22;
+                return fields.Length == 3 && fields[1] == "win32" && fields[2] == "x64" &&
+                    Int32.TryParse(fields[0].Split('.')[0], out major) && major >= 22;
             }
         }
         catch

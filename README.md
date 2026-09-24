@@ -1,6 +1,6 @@
 # LINE 聊天摘要工具（Codex 版）
 
-版本：2.5.2（2026-09-24）  
+版本：2.5.3（2026-09-24）  
 平台：Windows 10／11 x64  
 介面：HTML + 本機 Node.js 服務  
 聊天來源：LINE Windows 桌面版本機加密資料庫（唯讀）  
@@ -18,15 +18,23 @@
 ## 前置條件
 
 1. Windows 10／11 x64，LINE Windows 桌面版已登入，且聊天資料已同步到這台電腦。
-2. Node.js 22 或更新版本。加密 SQLite 元件使用其 Windows x64 原生模組。
+2. Node.js 22 或更新版本。使用一鍵安裝程式時，若找不到相容的 Node.js，安裝程式會下載 Node.js 22 LTS 免安裝執行環境並放在程式資料夾，不修改系統 PATH。
 3. Codex CLI 已安裝，並在同一個 Windows 帳號登入。
 
 摘要文字會透過已登入的 Codex CLI 送交 Codex 模型處理。使用前請確認選取的聊天內容適合交由該服務處理。
 
 ## 啟動與操作
 
+### 第一次安裝
+
+1. 雙擊 `LineChatSummary-Setup.exe`。安裝程式會安裝本工具；若找不到 Node.js 22 或更新版本，會從 Node.js 官方網站下載 Windows x64 壓縮包，驗證 SHA-256 後放到目前使用者的程式資料夾。
+2. 安裝程式不安裝 LINE 或 Codex CLI，也不修改它們的登入資料。使用者需先自行安裝並登入這兩項程式。
+3. 安裝完成後會建立開始功能表捷徑並開啟工具。首次下載 Node.js 時需要網路；產生摘要時也需要連線到 Codex 服務。
+
+### 直接啟動
+
 1. 開啟並登入 LINE Windows 桌面版；不必維持聊天室視窗開啟。
-2. 雙擊 `LineChatSummary.exe`。工具將介面、資料庫元件解壓到 `%LOCALAPPDATA%\LineChatSummary\web`，啟動只監聽 `127.0.0.1` 的本機服務，再開啟預設瀏覽器。
+2. 雙擊 `LineChatSummary.exe`。若未使用一鍵安裝程式，電腦必須已有 Node.js 22 或更新版本。工具將介面、資料庫元件解壓到 `%LOCALAPPDATA%\LineChatSummary\web`，啟動只監聽 `127.0.0.1` 的本機服務，再開啟預設瀏覽器。
 3. 勾選本機 LINE 記憶體讀取說明，按「載入群組」。首次掃描可能需要一段時間；載入後可按「重新載入」更新清單。
 4. 選擇群組與日期區間，按「產生聊天大意」。完成後摘要直接顯示在畫面右側，可複製摘要文字。
 5. 若本機資料庫無法讀取，可按「匯入 TXT 備用」選擇 LINE 手動儲存的聊天記錄。
@@ -62,11 +70,11 @@ HTML 來源為 `line-chat-summary-preview.html`。直接開啟 HTML 只能預覽
 
 ## 回復方式
 
-若 2.5.2 的本機資料庫讀取失敗，可暫時改用舊版 `LineChatSummary-2.4.7.zip` 內的 EXE，並手動匯入 LINE TXT。舊版依賴 LINE 視窗自動化，沒有本版的本機資料庫讀取功能。
+若 2.5.3 的本機資料庫讀取失敗，可暫時改用舊版 `LineChatSummary-2.4.7.zip` 內的 EXE，並手動匯入 LINE TXT。舊版依賴 LINE 視窗自動化，沒有本版的本機資料庫讀取功能。
 
 ## 維護與重新建置
 
-一般使用只需 `LineChatSummary.exe`。維護套件包含 `Launcher.cs`、`server.js`、`line-db.js`、PowerShell 資料庫掃描程式、HTML、資料庫原生元件壓縮檔與 `Build.ps1`。需要 Windows .NET Framework C# 編譯器及 Node.js 22+。
+維護套件包含 `Launcher.cs`、`SetupLauncher.cs`、`server.js`、`line-db.js`、PowerShell 資料庫掃描程式、HTML、資料庫原生元件壓縮檔與 `Build.ps1`。重新建置需要 Windows .NET Framework C# 編譯器。`Build.ps1` 會輸出 `LineChatSummary.exe`、`LineChatSummary-Setup.exe` 與版本維護 ZIP。
 
 在此資料夾執行：
 
@@ -80,6 +88,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1
 
 | 版本 | 日期 | 說明 |
 |---|---|---|
+| 2.5.3 | 2026-09-24 | 新增一鍵安裝程式；需要時從 Node.js 官方來源下載並驗證 Node.js 22 LTS，安裝到使用者程式資料夾，不安裝 LINE 或 Codex CLI；改用 48745 埠。 |
 | 2.5.2 | 2026-09-24 | 修正掃描器 C# 將 `IntPtr RegionSize` 誤用 `ToUInt64()` 而編譯失敗；改用 `ToInt64()` 轉換，並改用 48744 埠。 |
 | 2.5.1 | 2026-09-24 | 修正 Windows PowerShell 5.1 的資料庫掃描腳本 UTF-8 編碼標記；補強掃描失敗診斷，日誌遮蔽 32–64 位十六進位解鎖候選值；改用 48743 埠。 |
 | 2.5.0 | 2026-09-24 | 改讀 LINE 本機加密資料庫，支援直接列群組並按日期查訊息；移除摘要流程對 LINE 視窗及「儲存聊天」選單的依賴；只讀查詢、不建立聊天 TXT；更新 EXE 啟動包並加入加密 SQLite 原生元件。 |
