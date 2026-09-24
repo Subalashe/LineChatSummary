@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b5137">
+  <title>LINE 聊天摘要｜Codex</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182c25;
+      --muted: #697a72;
+      --line: #e4ebe6;
+      --canvas: #f3f7f4;
+      --green: #0e6946;
+      --green-dark: #09442f;
+      --green-soft: #e8f4ed;
+      --amber: #946217;
+      --amber-bg: #fff8e8;
+      --red: #a43f36;
+      --shadow: 0 18px 55px rgba(31, 66, 49, .08);
+    }
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--canvas); }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      font-family: "Microsoft JhengHei UI", "Noto Sans TC", "Segoe UI", sans-serif;
+      font-size: 14px;
+      background:
+        radial-gradient(ellipse at 4% 0%, rgba(178, 222, 194, .35), transparent 34rem),
+        var(--canvas);
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { max-width: 1240px; margin: 0 auto; padding: 30px 28px 32px; }
+    .hero {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 142px;
+      padding: 26px 32px;
+      overflow: hidden;
+      border-radius: 20px;
+      color: #fff;
+      background: linear-gradient(116deg, #0a4932 0%, #0f6845 58%, #168352 100%);
+      box-shadow: 0 16px 36px rgba(10, 73, 50, .16);
+    }
+    .hero::after {
+      position: absolute;
+      top: -136px;
+      right: 70px;
+      width: 360px;
+      height: 360px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 50%;
+      box-shadow: 0 0 0 32px rgba(255,255,255,.035), 0 0 0 72px rgba(255,255,255,.025);
+      content: "";
+      pointer-events: none;
+    }
+    .brand { position: relative; z-index: 1; display: flex; align-items: center; gap: 18px; }
+    .brand-mark {
+      display: grid;
+      width: 58px;
+      height: 58px;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 17px;
+      background: rgba(255,255,255,.1);
+    }
+    .brand-mark svg { width: 31px; height: 31px; }
+    h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: .04em; }
+    .subtitle { margin-top: 7px; color: rgba(255,255,255,.78); font-size: 14px; letter-spacing: .02em; }
+    .hero-side { position: relative; z-index: 1; display: grid; justify-items: end; gap: 11px; }
+    .engine-pill, .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 999px;
+      padding: 8px 13px;
+      color: white;
+      background: rgba(255,255,255,.1);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .engine-pill strong { font-weight: 650; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #9ce2ae; box-shadow: 0 0 0 3px rgba(156,226,174,.15); }
+    .status-pill.offline .status-dot { background: #ffd28a; box-shadow: 0 0 0 3px rgba(255,210,138,.15); }
+    .status-pill.error .status-dot { background: #ffaaa2; box-shadow: 0 0 0 3px rgba(255,170,162,.15); }
+
+    .layout { display: grid; grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); gap: 20px; margin-top: 20px; align-items: stretch; }
+    .card {
+      border: 1px solid rgba(214, 226, 218, .9);
+      border-radius: 17px;
+      background: rgba(255,255,255,.96);
+      box-shadow: var(--shadow);
+    }
+    .setup-card { position: relative; z-index: 2; padding: 22px 23px 20px; }
+    .card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .eyebrow { color: #789084; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin: 5px 0 0; font-size: 18px; font-weight: 700; letter-spacing: .015em; }
+    .step-label { color: #8b9b93; font-size: 11px; white-space: nowrap; }
+    .rule { height: 1px; margin: 17px 0 19px; background: var(--line); }
+    .field { margin-top: 17px; }
+    .field:first-of-type { margin-top: 0; }
+    .field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    label, .field-label { color: #344b40; font-size: 12px; font-weight: 650; }
+    .link-button { border: 0; padding: 0; color: var(--green); background: transparent; font-size: 11px; font-weight: 650; }
+    .link-button:hover { text-decoration: underline; }
+    .link-button:disabled { cursor: wait; opacity: .55; }
+    .input-row { display: flex; gap: 8px; }
+    select, input[type="text"] {
+      width: 100%;
+      min-width: 0;
+      height: 40px;
+      border: 1px solid #dce6df;
+      border-radius: 9px;
+      outline: none;
+      padding: 0 11px;
+      color: #1f342a;
+      background: #fff;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    select:focus, input:focus { border-color: #3b9c6c; box-shadow: 0 0 0 3px rgba(37,139,88,.12); }
+    select:disabled { color: #86958e; background: #f8faf8; }
+    .outline-button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 1px solid #d9e5dd;
+      border-radius: 9px;
+      padding: 0 12px;
+      color: #365345;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 650;
+      transition: background .15s, border-color .15s;
+    }
+    .outline-button:hover { border-color: #a8cbb6; background: #f5faf6; }
+    .import-button { min-width: 100px; }
+    .hint { margin: 7px 1px 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+    .chat-target {
+      display: flex; min-height: 72px; align-items: center; gap: 12px; margin-top: 2px;
+      border: 1px solid #dce9e0; border-radius: 12px; padding: 12px 14px;
+      background: linear-gradient(110deg, #f5fbf6, #fff);
+    }
+    .chat-target-icon {
+      display: flex; width: 38px; height: 38px; flex: 0 0 auto; align-items: flex-end; justify-content: center; gap: 3px;
+      border: 1px solid #d7eadc; border-radius: 12px; padding: 10px 9px; background: #eaf6ed;
+    }
+    .chat-target-icon span { width: 4px; border-radius: 5px; background: #198353; }
+    .chat-target-icon span:nth-child(1) { height: 9px; opacity: .65; }
+    .chat-target-icon span:nth-child(2) { height: 15px; }
+    .chat-target-icon span:nth-child(3) { height: 11px; opacity: .8; }
+    .chat-target-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+    .chat-target-copy strong { overflow: hidden; color: #244334; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-target-copy span { color: #84948a; font-size: 10px; line-height: 1.45; }
+    .chat-target-status { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #bac7be; }
+    .chat-target.detected { border-color: #cce5d3; background: linear-gradient(110deg, #eff9f1, #fff); }
+    .chat-target.detected .chat-target-status { background: #1ca467; box-shadow: 0 0 0 4px rgba(28,164,103,.1); }
+    .chat-target.error { border-color: #ecd6d2; background: #fff9f8; }
+    .chat-target.error .chat-target-status { background: #c75b4f; box-shadow: 0 0 0 4px rgba(199,91,79,.1); }
+    .source-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .import-state { display: none; min-width: 0; flex: 1; margin: 0; border-radius: 8px; padding: 7px 9px; color: #376449; background: #eff8f1; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+    .import-state.visible { display: block; }
+    .range-wrap { position: relative; }
+    .range-display {
+      display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px;
+      border: 1px solid #dce6df; border-radius: 10px; padding: 0 12px; color: #263b30; background: #fff;
+      text-align: left; transition: border-color .15s, box-shadow .15s;
+    }
+    .range-display:hover, .range-display[aria-expanded="true"] { border-color: #69ae84; box-shadow: 0 0 0 3px rgba(37,139,88,.09); }
+    .range-display strong { font-size: 12px; font-weight: 650; }
+    .range-display span { color: var(--green); font-size: 17px; }
+    .range-calendar {
+      position: absolute; z-index: 10; top: 51px; left: 0; width: min(680px, calc(100vw - 64px));
+      border: 1px solid #e2eae5; border-radius: 16px; padding: 17px; background: #fff;
+      box-shadow: 0 22px 55px rgba(23,51,36,.18);
+    }
+    .range-calendar.closed { display: none; }
+    .calendar-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .quick-ranges, .calendar-nav { display: flex; align-items: center; gap: 6px; }
+    .quick-ranges button, .calendar-nav button {
+      min-height: 30px; border: 1px solid #e4ebe6; border-radius: 8px; padding: 0 9px;
+      color: #5c7065; background: #fff; font-size: 10px;
+    }
+    .quick-ranges button.active { border-color: #a8d8bd; color: #148454; background: #f0faf4; }
+    .calendar-nav button { width: 30px; padding: 0; font-size: 16px; }
+    .months { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .month-title { margin: 0 0 8px; text-align: center; font-size: 12px; font-weight: 700; }
+    .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+    .weekday { padding: 4px 0 7px; color: #9aa8a1; font-size: 9px; }
+    .day { position: relative; display: grid; min-height: 34px; place-items: center; }
+    .day button {
+      position: relative; z-index: 1; width: 29px; height: 29px; border: 0; border-radius: 50%;
+      color: #334a40; background: transparent; font-size: 11px; touch-action: none;
+    }
+    .day button:hover { background: #edf7f1; }
+    .day.in-range::before { position: absolute; top: 2px; right: 0; bottom: 2px; left: 0; background: #eaf7ef; content: ""; }
+    .day.range-start::before { left: 50%; border-radius: 99px 0 0 99px; }
+    .day.range-end::before { right: 50%; border-radius: 0 99px 99px 0; }
+    .day.selected button { color: #fff; background: #17a36b; font-weight: 750; box-shadow: 0 2px 7px rgba(23,163,107,.2); }
+    .day.muted button { color: #c1cac5; }
+    .calendar-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; border-top: 1px solid #edf1ee; padding-top: 11px; color: #89978f; font-size: 10px; }
+    .calendar-foot strong { color: #315742; font-weight: 650; }
+    .temp-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 15px; color: #6e8176; font-size: 10px; line-height: 1.6; }
+    .memory-consent { margin-top: 12px; }
+    .memory-consent input { width: 14px; height: 14px; flex: 0 0 auto; margin: 1px 0 0; accent-color: #188452; }
+    .temp-note .check { display: grid; width: 17px; height: 17px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #218a5b; background: #e4f4e9; font-size: 10px; font-weight: 800; }
+    .notice {
+      display: flex;
+      gap: 10px;
+      margin-top: 19px;
+      border: 1px solid #f1e5c8;
+      border-radius: 11px;
+      padding: 11px 12px;
+      color: #7a5a22;
+      background: var(--amber-bg);
+      font-size: 11px;
+      line-height: 1.65;
+    }
+    .notice svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; }
+    .notice strong { font-weight: 700; }
+    .action-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+    .primary-button {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 17px;
+      color: white;
+      background: linear-gradient(112deg, #0d6845, #13804f);
+      box-shadow: 0 7px 15px rgba(15, 104, 69, .16);
+      font-size: 12px;
+      font-weight: 700;
+      transition: transform .15s, box-shadow .15s, opacity .15s;
+    }
+    .primary-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(15,104,69,.22); }
+    .primary-button:disabled { cursor: not-allowed; opacity: .52; box-shadow: none; }
+    .primary-button svg { width: 15px; height: 15px; }
+    .action-help { color: #84938b; font-size: 10px; line-height: 1.5; }
+
+    .result-card { display: flex; min-height: 500px; flex-direction: column; overflow: hidden; }
+    .result-head { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid #eaf0ec; padding: 17px 21px; }
+    .result-title { display: flex; align-items: center; gap: 11px; }
+    .result-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; color: var(--green); background: #ebf6ee; }
+    .result-icon svg { width: 17px; height: 17px; }
+    .result-heading { margin: 0; font-size: 14px; font-weight: 700; }
+    .result-subheading { margin-top: 3px; color: #87968e; font-size: 10px; }
+    .copy-button { display: none; align-items: center; gap: 7px; border: 1px solid #dfe9e2; border-radius: 8px; padding: 8px 11px; color: #3f5a4c; background: #fff; font-size: 11px; font-weight: 650; }
+    .copy-button.visible { display: inline-flex; }
+    .copy-button:hover { background: #f6faf7; }
+    .copy-button svg { width: 13px; height: 13px; }
+    .result-body { flex: 1; padding: 22px; }
+    .empty-state { display: flex; height: 100%; min-height: 350px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .empty-art { display: grid; width: 84px; height: 84px; place-items: center; border: 1px solid #e7efe9; border-radius: 25px; color: #7ba48a; background: #f6faf7; }
+    .empty-art svg { width: 36px; height: 36px; }
+    .empty-title { margin: 18px 0 7px; color: #3b5146; font-size: 15px; font-weight: 700; }
+    .empty-copy { max-width: 310px; color: #8a9991; font-size: 12px; line-height: 1.75; }
+    .summary-text { display: none; margin: 0; color: #293c32; font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
+    .summary-text.visible { display: block; }
+    .summary-text h3 { margin: 17px 0 7px; color: #176545; font-size: 14px; line-height: 1.5; }
+    .summary-text h3:first-child { margin-top: 0; }
+    .summary-text p { margin: 6px 0 10px; }
+    .summary-text ul, .summary-text ol { margin: 5px 0 13px; padding-left: 22px; }
+    .summary-text li { margin: 4px 0; padding-left: 2px; }
+    .summary-text blockquote { margin: 7px 0; border-left: 3px solid #c4ddcc; padding: 3px 10px; color: #718178; }
+    .summary-table { width: 100%; margin: 9px 0 14px; border-collapse: collapse; font-size: 12px; }
+    .summary-table th, .summary-table td { border: 1px solid #e4ece6; padding: 7px 9px; text-align: left; vertical-align: top; }
+    .summary-table th { color: #3e594a; background: #f4f8f5; font-weight: 700; }
+    .summary-meta { display: none; flex-wrap: wrap; gap: 7px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #edf2ee; color: #7a8c82; font-size: 10px; }
+    .summary-meta.visible { display: flex; }
+    .meta-chip { border: 1px solid #e4ece6; border-radius: 999px; padding: 5px 8px; background: #fbfdfb; }
+    .result-card.loading .result-body { background: linear-gradient(180deg, #fff, #fbfdfb); }
+    .spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.45); border-top-color: white; border-radius: 50%; animation: spin .75s linear infinite; }
+    .primary-button.loading .spinner { display: inline-block; }
+    .primary-button.loading .arrow { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-line { min-height: 20px; margin: 13px 2px 0; color: #76877e; font-size: 11px; line-height: 1.5; }
+    .status-line.error { color: var(--red); }
+    .status-line.success { color: var(--green); }
+    .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 0 4px; color: #96a39c; font-size: 10px; }
+    .footer-mark { display: flex; align-items: center; gap: 7px; }
+    .footer-mark svg { width: 13px; height: 13px; color: #5d9b73; }
+    .offline-banner { display: none; margin-top: 13px; border: 1px solid #efd6d2; border-radius: 10px; padding: 10px 12px; color: #8d453d; background: #fff6f5; font-size: 11px; line-height: 1.6; }
+    .offline-banner.visible { display: block; }
+    #fileInput { display: none; }
+    @media (max-width: 900px) {
+      .shell { padding: 18px; }
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .range-calendar { position: relative; top: auto; left: auto; width: 100%; margin-top: 8px; box-shadow: 0 10px 26px rgba(23,51,36,.1); }
+      .result-card { min-height: 390px; }
+      .empty-state { min-height: 270px; }
+    }
+    @media (max-width: 560px) {
+      .shell { padding: 12px; }
+      .hero { min-height: 125px; padding: 20px 18px; border-radius: 15px; }
+      .brand { gap: 12px; }
+      .brand-mark { width: 46px; height: 46px; border-radius: 13px; }
+      h1 { font-size: 20px; }
+      .subtitle { max-width: 230px; font-size: 11px; line-height: 1.5; }
+      .hero-side { gap: 6px; }
+      .engine-pill, .status-pill { padding: 7px 9px; font-size: 10px; }
+      .setup-card { padding: 18px 16px; }
+      .range-calendar { padding: 13px; }
+      .calendar-head { align-items: flex-start; }
+      .quick-ranges { gap: 4px; }
+      .quick-ranges button { padding: 0 6px; font-size: 9px; }
+      .months { grid-template-columns: 1fr; gap: 8px; }
+      .month.second { display: none; }
+      .day button { width: 27px; height: 27px; }
+      .action-row { align-items: flex-start; flex-direction: column; }
+      .primary-button { width: 100%; }
+      .result-head { padding: 14px; }
+      .result-body { padding: 17px; }
+      .footer { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M16 4.5c-6.7 0-12 4.4-12 9.9 0 3.1 1.7 5.9 4.5 7.7l-.8 4.3 4.6-2.4c1.2.3 2.4.5 3.7.5 6.6 0 12-4.4 12-9.9S22.6 4.5 16 4.5Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M10 14.5h12M10 18.5h7" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1>LINE 聊天摘要</h1>
+          <div class="subtitle">選擇 LINE 群組與時間，快速掌握這段期間的聊天大意</div>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="engine-pill"><span aria-hidden="true">✦</span><strong>Codex 智慧摘要</strong></div>
+        <div class="status-pill offline" id="codexStatus"><span class="status-dot"></span><span id="codexStatusText">正在確認 Codex…</span></div>
+      </div>
+    </header>
+
+    <section class="layout">
+      <section class="card setup-card" aria-labelledby="setupTitle">
+        <div class="card-heading">
+          <div><div class="eyebrow">CHAT SOURCE</div><h2 id="setupTitle">聊天記錄</h2></div>
+          <span class="step-label">本機資料庫 · 唯讀</span>
+        </div>
+        <div class="rule"></div>
+
+        <div class="field">
+          <div class="field-head">
+            <label for="groupSelect">選擇 LINE 群組</label>
+            <button class="link-button" id="loadGroupsButton" type="button" disabled>載入群組</button>
+          </div>
+          <div class="input-row">
+            <select id="groupSelect" disabled aria-label="選擇 LINE 群組">
+              <option value="">先確認讀取方式，再載入群組</option>
+            </select>
+            <button class="outline-button" id="refreshGroupsButton" type="button" disabled>重新載入</button>
+          </div>
+          <div class="chat-target" id="chatTarget">
+            <div class="chat-target-icon" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="chat-target-copy">
+              <strong id="currentChatName">尚未載入群組</strong>
+              <span id="currentChatState">LINE 保持登入即可；聊天室視窗可縮小或關閉</span>
+            </div>
+            <span class="chat-target-status" id="chatTargetStatus" aria-hidden="true"></span>
+          </div>
+          <p class="hint" id="groupHint">讀取 LINE 本機同步的群組清單與訊息，不需開啟聊天室或操作 LINE 視窗。</p>
+          <label class="temp-note memory-consent" for="memoryConsent">
+            <input id="memoryConsent" type="checkbox">
+            <span>我了解工具會以唯讀方式檢查目前登入的 LINE 程序記憶體，尋找本機資料庫解鎖資訊；候選值只在本機處理，不寫入檔案或日誌。</span>
+          </label>
+          <div class="source-actions">
+            <button class="outline-button import-button" id="importButton" type="button">匯入 TXT 備用</button>
+            <input id="fileInput" type="file" accept=".txt,text/plain">
+            <div class="import-state" id="importState"></div>
+          </div>
+        </div>
+
+        <div class="field range-wrap">
+          <div class="field-head"><span class="field-label">摘要日期範圍</span><span class="step-label">依訊息日期篩選</span></div>
+          <button class="range-display" id="rangeDisplay" type="button" aria-expanded="false" aria-controls="rangeCalendar">
+            <strong id="rangeText">載入日期範圍…</strong><span aria-hidden="true">▦</span>
+          </button>
+          <div class="range-calendar closed" id="rangeCalendar">
+            <div class="calendar-head">
+              <div class="quick-ranges" role="group" aria-label="快速日期範圍">
+                <button type="button" data-days="7" class="active">近 7 天</button>
+                <button type="button" data-days="30">近 30 天</button>
+                <button type="button" data-days="custom">自訂</button>
+              </div>
+              <div class="calendar-nav"><button type="button" id="prevMonth" aria-label="前一個月">‹</button><button type="button" id="nextMonth" aria-label="後一個月">›</button></div>
+            </div>
+            <div class="months" id="calendarMonths"></div>
+            <div class="calendar-foot"><span>點選起訖日期，或按住拖曳選取</span><strong id="rangeHint">已選 7 天</strong></div>
+          </div>
+          <p class="hint">結果只整理此日期區間內的文字訊息，顯示幾個重點說明大致話題。</p>
+          <div class="temp-note"><span class="check" aria-hidden="true">✓</span><span>本機資料庫以唯讀方式查詢；工具不另存聊天 TXT 或聊天內容日誌。</span></div>
+        </div>
+
+        <div class="action-row">
+          <button class="primary-button" id="runButton" type="button" disabled>
+            <span class="spinner" aria-hidden="true"></span>
+            <svg class="arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h11m-4.5-4.5L15 10l-4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span id="runButtonText">產生聊天大意</span>
+          </button>
+          <span class="action-help">讀取已選群組與日期<br>摘要直接顯示在右側</span>
+        </div>
+        <div class="offline-banner" id="offlineBanner"></div>
+        <div class="status-line" id="statusLine" role="status" aria-live="polite">請先確認本機讀取說明，再載入 LINE 群組。</div>
+      </section>
+
+      <section class="card result-card" id="resultCard" aria-labelledby="resultTitle">
+        <div class="result-head">
+          <div class="result-title">
+            <span class="result-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M5 3.5h7l3 3v10H5v-13Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3.8v3h2.7M7.5 10h5m-5 3h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <div><h2 class="result-heading" id="resultTitle">聊天大意</h2><div class="result-subheading" id="resultSubheading">整理完成後會顯示在這裡</div></div>
+          </div>
+          <button class="copy-button" id="copyButton" type="button">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.3" y="2.5" width="8" height="10" rx="1.3" stroke="currentColor" stroke-width="1.3"/><path d="M3 5v7.7c0 .7.6 1.3 1.3 1.3H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            複製摘要
+          </button>
+        </div>
+        <div class="result-body">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-art" aria-hidden="true">
+              <svg viewBox="0 0 40 40" fill="none"><path d="M11 7.5h12l7 7v18H11v-25Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M23 7.8v7h6.7M16 21h9m-9 5h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M5.5 11v24h19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity=".55"/></svg>
+            </div>
+            <div class="empty-title">這段時間大家在聊什麼？</div>
+            <div class="empty-copy">選擇 LINE 群組與時間範圍，這裡會顯示幾個簡短重點。</div>
+          </div>
+          <div class="summary-text" id="summaryText"></div>
+          <div class="summary-meta" id="summaryMeta"></div>
+        </div>
+      </section>
+    </section>
+
+    <footer class="footer">
+      <div class="footer-mark">
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.8 13.4 4v3.9c0 3.2-2.1 5.4-5.4 6.4-3.3-1-5.4-3.2-5.4-6.4V4L8 1.8Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="m5.5 7.8 1.6 1.6 3.4-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>LINE 本機資料庫唯讀 · 不操作 LINE 視窗 · 不記錄聊天內容</span>
+      </div>
+      <span>LINE 聊天摘要工具 · Codex 版</span>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      const apiAvailable = location.protocol === 'http:' && location.hostname === '127.0.0.1';
+      const $ = function (id) { return document.getElementById(id); };
+      const statusLine = $('statusLine');
+      const runButton = $('runButton');
+      const calendarMonths = $('calendarMonths');
+      let rangeStart;
+      let rangeEnd;
+      let calendarView;
+      let choosingEnd = false;
+      let pointerRange = null;
+      let importedTranscript = null;
+      let importedGroupName = null;
+      let selectedGroupId = '';
+      let selectedGroupName = '';
+      let groupsLoaded = false;
+      let memoryReadConsented = false;
+      let groupScanBusy = false;
+      let busy = false;
+      let lastSummary = '';
+
+      const pad = function (n) { return String(n).padStart(2, '0'); };
+      function dateKey(date) { return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()); }
+      function dateFromKey(key) { const parts = key.split('-').map(Number); return new Date(parts[0], parts[1] - 1, parts[2]); }
+      function formatDate(date) { return date.getFullYear() + '/' + pad(date.getMonth() + 1) + '/' + pad(date.getDate()); }
+      function sameDate(a, b) { return dateKey(a) === dateKey(b); }
+      function updateRangeDisplay(previewEnd) {
+        const end = previewEnd || rangeEnd;
+        const first = rangeStart <= end ? rangeStart : end;
+        const last = rangeStart <= end ? end : rangeStart;
+        $('rangeText').textContent = formatDate(first) + '　—　' + formatDate(last);
+        $('rangeHint').textContent = '已選 ' + (Math.round((last - first) / 86400000) + 1) + ' 天';
+      }
+      function markCustomRange() {
+        document.querySelectorAll('.quick-ranges button').forEach(function (button) {
+          button.classList.toggle('active', button.dataset.days === 'custom');
+        });
+      }
+      function paintRange(previewEnd) {
+        const end = previewEnd || rangeEnd;
+        const first = rangeStart <= end ? rangeStart : end;
+        const last = rangeStart <= end ? end : rangeStart;
+        calendarMonths.querySelectorAll('.day').forEach(function (cell) {
+          const button = cell.querySelector('button[data-date]');
+          if (!button) return;
+          const date = dateFromKey(button.dataset.date);
+          cell.classList.toggle('in-range', date >= first && date <= last);
+          cell.classList.toggle('range-start', sameDate(date, first));
+          cell.classList.toggle('range-end', sameDate(date, last));
+          cell.classList.toggle('selected', sameDate(date, first) || sameDate(date, last));
+        });
+        updateRangeDisplay(previewEnd);
+      }
+      function chooseDate(date) {
+        if (!choosingEnd) {
+          rangeStart = date;
+          rangeEnd = date;
+          choosingEnd = true;
+        } else {
+          rangeEnd = date;
+          if (rangeStart > rangeEnd) { const swap = rangeStart; rangeStart = rangeEnd; rangeEnd = swap; }
+          choosingEnd = false;
+        }
+        markCustomRange();
+        paintRange();
+      }
+      function renderCalendar() {
+        calendarMonths.replaceChildren();
+        for (let index = 0; index < 2; index++) {
+          const month = new Date(calendarView.getFullYear(), calendarView.getMonth() + index, 1);
+          const panel = document.createElement('div');
+          panel.className = 'month' + (index ? ' second' : '');
+          const title = document.createElement('div');
+          title.className = 'month-title';
+          title.textContent = month.getFullYear() + ' 年 ' + (month.getMonth() + 1) + ' 月';
+          panel.appendChild(title);
+          const grid = document.createElement('div');
+          grid.className = 'days';
+          ['日', '一', '二', '三', '四', '五', '六'].forEach(function (weekday) {
+            const label = document.createElement('div');
+            label.className = 'weekday';
+            label.textContent = weekday;
+            grid.appendChild(label);
+          });
+          const firstWeekday = month.getDay();
+          const dayCount = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+          for (let blankIndex = 0; blankIndex < firstWeekday; blankIndex++) {
+            const blank = document.createElement('div');
+            blank.className = 'day muted';
+            grid.appendChild(blank);
+          }
+          for (let dayNumber = 1; dayNumber <= dayCount; dayNumber++) {
+            const date = new Date(month.getFullYear(), month.getMonth(), dayNumber);
+            const cell = document.createElement('div');
+            cell.className = 'day';
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = String(dayNumber);
+            button.dataset.date = dateKey(date);
+            button.setAttribute('aria-label', formatDate(date));
+            button.addEventListener('pointerdown', function (event) {
+              if (event.button !== undefined && event.button !== 0) return;
+              event.preventDefault();
+              pointerRange = { anchor: date, previewEnd: date, wasChoosingEnd: choosingEnd, moved: false };
+              if (!choosingEnd) { rangeStart = date; rangeEnd = date; }
+              paintRange(date);
+            });
+            button.addEventListener('click', function (event) {
+              if (event.detail === 0) chooseDate(date);
+            });
+            cell.appendChild(button);
+            grid.appendChild(cell);
+          }
+          panel.appendChild(grid);
+          calendarMonths.appendChild(panel);
+        }
+        paintRange();
+      }
+      function finishPointerRange() {
+        if (!pointerRange) return;
+        const selection = pointerRange;
+        pointerRange = null;
+        if (selection.wasChoosingEnd || selection.moved) {
+          rangeEnd = selection.previewEnd;
+          if (rangeStart > rangeEnd) { const swap = rangeStart; rangeStart = rangeEnd; rangeEnd = swap; }
+          choosingEnd = false;
+        } else {
+          rangeStart = selection.anchor;
+          rangeEnd = selection.anchor;
+          choosingEnd = true;
+        }
+        markCustomRange();
+        paintRange();
+      }
+      document.addEventListener('pointermove', function (event) {
+        if (!pointerRange) return;
+        const target = document.elementFromPoint(event.clientX, event.clientY);
+        const button = target && target.closest('button[data-date]');
+        if (!button) return;
+        const date = dateFromKey(button.dataset.date);
+        if (!sameDate(date, pointerRange.anchor)) pointerRange.moved = true;
+        pointerRange.previewEnd = date;
+        paintRange(date);
+      });
+      document.addEventListener('pointerup', finishPointerRange);
+      document.addEventListener('pointercancel', finishPointerRange);
+      $('prevMonth').addEventListener('click', function () {
+        calendarView = new Date(calendarView.getFullYear(), calendarView.getMonth() - 1, 1);
+        renderCalendar();
+      });
+      $('nextMonth').addEventListener('click', function () {
+        calendarView = new Date(calendarView.getFullYear(), calendarView.getMonth() + 1, 1);
+        renderCalendar();
+      });
+      document.querySelectorAll('.quick-ranges button').forEach(function (button) {
+        button.addEventListener('click', function () {
+          if (button.dataset.days !== 'custom') {
+            const today = new Date();
+            const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - Number(button.dataset.days) + 1);
+            rangeStart = start;
+            rangeEnd = end;
+            choosingEnd = false;
+            calendarView = new Date(start.getFullYear(), start.getMonth(), 1);
+            renderCalendar();
+          }
+          document.querySelectorAll('.quick-ranges button').forEach(function (item) { item.classList.toggle('active', item === button); });
+        });
+      });
+      $('rangeDisplay').addEventListener('click', function () {
+        const calendar = $('rangeCalendar');
+        const opening = calendar.classList.contains('closed');
+        calendar.classList.toggle('closed', !opening);
+        $('rangeDisplay').setAttribute('aria-expanded', String(opening));
+      });
+      document.addEventListener('click', function (event) {
+        if ($('rangeCalendar').classList.contains('closed')) return;
+        if ($('rangeCalendar').contains(event.target) || $('rangeDisplay').contains(event.target)) return;
+        $('rangeCalendar').classList.add('closed');
+        $('rangeDisplay').setAttribute('aria-expanded', 'false');
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          $('rangeCalendar').classList.add('closed');
+          $('rangeDisplay').setAttribute('aria-expanded', 'false');
+        }
+      });
+      function setStatus(text, kind) {
+        statusLine.textContent = text;
+        statusLine.className = 'status-line' + (kind ? ' ' + kind : '');
+      }
+      function setBusy(value, label) {
+        busy = value;
+        runButton.disabled = value || (!importedTranscript && (!selectedGroupId || !memoryReadConsented));
+        $('groupSelect').disabled = value || !groupsLoaded || $('groupSelect').options.length < 2;
+        runButton.classList.toggle('loading', value);
+        $('resultCard').classList.toggle('loading', value);
+        $('runButtonText').textContent = label || (value ? 'Codex 正在整理…' : '產生聊天大意');
+        $('loadGroupsButton').disabled = value || groupScanBusy || !memoryReadConsented;
+        $('refreshGroupsButton').disabled = value || groupScanBusy || !memoryReadConsented;
+        $('importButton').disabled = value;
+      }
+      function setConnection(ok, text) {
+        const badge = $('codexStatus');
+        badge.classList.toggle('offline', !ok);
+        badge.classList.toggle('error', !ok);
+        $('codexStatusText').textContent = text;
+      }
+      function enableRunIfPossible() {
+        if (!busy) runButton.disabled = !importedTranscript && (!selectedGroupId || !memoryReadConsented);
+        $('groupSelect').disabled = busy || !groupsLoaded || $('groupSelect').options.length < 2;
+        $('loadGroupsButton').disabled = !apiAvailable || busy || groupScanBusy || !memoryReadConsented;
+        $('refreshGroupsButton').disabled = !apiAvailable || busy || groupScanBusy || !memoryReadConsented;
+      }
+      async function api(path, options) {
+        const response = await fetch(path, Object.assign({ cache: 'no-store' }, options || {}));
+        let data;
+        try { data = await response.json(); } catch (_) { data = { ok: false, error: '本機服務沒有回傳有效資料。' }; }
+        if (!response.ok && !data.error) data.error = '本機服務發生錯誤。';
+        return { response: response, data: data };
+      }
+      function renderSummary(text, host) {
+        host.replaceChildren();
+        let list = null;
+        let table = null;
+        text.split(/\r?\n/).forEach(function (line) {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            list = null;
+            table = null;
+            return;
+          }
+          const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
+          if (heading) {
+            list = null;
+            table = null;
+            const element = document.createElement('h3');
+            element.textContent = heading[1];
+            host.appendChild(element);
+            return;
+          }
+          if (trimmed.charAt(0) === '|' && trimmed.slice(-1) === '|') {
+            list = null;
+            const cells = trimmed.slice(1, -1).split('|').map(function (cell) { return cell.trim(); });
+            if (cells.every(function (cell) { return /^:?-{3,}:?$/.test(cell); })) return;
+            if (!table) {
+              table = document.createElement('table');
+              table.className = 'summary-table';
+              host.appendChild(table);
+            }
+            const row = document.createElement('tr');
+            cells.forEach(function (cell) {
+              const element = document.createElement(table.rows.length === 0 ? 'th' : 'td');
+              element.textContent = cell;
+              row.appendChild(element);
+            });
+            table.appendChild(row);
+            return;
+          }
+          table = null;
+          const bullet = trimmed.match(/^[-*+]\s+(.+)$/);
+          const numbered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+          if (bullet || numbered) {
+            const type = bullet ? 'ul' : 'ol';
+            if (!list || list.tagName.toLowerCase() !== type) {
+              list = document.createElement(type);
+              host.appendChild(list);
+            }
+            const item = document.createElement('li');
+            item.textContent = (bullet || numbered)[1];
+            list.appendChild(item);
+            return;
+          }
+          list = null;
+          if (trimmed.charAt(0) === '>') {
+            const quote = document.createElement('blockquote');
+            quote.textContent = trimmed.slice(1).trim();
+            host.appendChild(quote);
+            return;
+          }
+          const paragraph = document.createElement('p');
+          paragraph.textContent = trimmed;
+          host.appendChild(paragraph);
+        });
+      }
+      async function loadStatus() {
+        if (!apiAvailable) {
+          setConnection(false, '請從 EXE 啟動');
+          $('offlineBanner').textContent = '這是 HTML 預覽畫面。請雙擊 LineChatSummary.exe 啟動本機服務，才能讀取 LINE 與呼叫 Codex。';
+          $('offlineBanner').classList.add('visible');
+          $('loadGroupsButton').disabled = true;
+          $('refreshGroupsButton').disabled = true;
+          $('importButton').disabled = true;
+          return;
+        }
+        try {
+          const result = await api('/api/status');
+          const data = result.data;
+          if (!data.codexInstalled) {
+            setConnection(false, '找不到 Codex CLI');
+            $('offlineBanner').textContent = '找不到 Codex CLI。請確認已安裝 Codex 桌面版，並重新啟動本工具。';
+            $('offlineBanner').classList.add('visible');
+            return;
+          }
+          if (!data.codexLoggedIn) {
+            setConnection(false, 'Codex 尚未登入');
+            $('offlineBanner').textContent = '請先在此 Windows 帳號登入 Codex，再重新啟動工具。此工具使用 Codex 登入狀態，不需要 API Key。';
+            $('offlineBanner').classList.add('visible');
+          } else {
+            setConnection(true, 'Codex 已就緒');
+            $('offlineBanner').classList.remove('visible');
+          }
+        } catch (_) {
+          setConnection(false, '本機服務未連線');
+          $('offlineBanner').textContent = '無法連線本機服務。請關閉此頁面，再雙擊 LineChatSummary.exe 啟動。';
+          $('offlineBanner').classList.add('visible');
+        }
+      }
+      async function loadGroups(refresh) {
+        if (!apiAvailable || busy || groupScanBusy) return;
+        if (!memoryReadConsented) return setStatus('請先勾選本機記憶體讀取說明，再載入 LINE 群組。', 'error');
+        groupScanBusy = true;
+        $('loadGroupsButton').disabled = true;
+        $('refreshGroupsButton').disabled = true;
+        $('currentChatState').textContent = '正在唯讀 LINE 本機資料庫…首次載入可能需要一分鐘';
+        $('chatTarget').classList.remove('error');
+        setStatus('正在從 LINE 本機資料庫讀取群組；不操作 LINE 視窗，聊天室可縮小…');
+        try {
+          const query = '?memoryConsent=1' + (refresh ? '&refresh=1' : '');
+          const result = await api('/api/groups' + query);
+          if (!result.data.ok) throw new Error(result.data.error || '無法讀取 LINE 群組。');
+          const groups = Array.isArray(result.data.groups) ? result.data.groups : [];
+          groupsLoaded = true;
+          const select = $('groupSelect');
+          const previousId = selectedGroupId;
+          select.replaceChildren();
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = groups.length ? '請選擇群組' : '沒有找到已同步的群組';
+          select.appendChild(placeholder);
+          groups.forEach(function (group) {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = group.name + '　·　' + (group.typeLabel || '群組') + (group.lastMessageAt ? '　·　' + group.lastMessageAt : '');
+            option.dataset.name = group.name;
+            select.appendChild(option);
+          });
+          select.disabled = groups.length === 0;
+          select.value = groups.some(function (group) { return group.id === previousId; }) ? previousId : '';
+          selectedGroupId = select.value;
+          const selectedOption = select.options[select.selectedIndex];
+          selectedGroupName = selectedOption && selectedOption.dataset.name || '';
+          $('currentChatName').textContent = groups.length ? (selectedGroupName || (groups.length + ' 個群組已載入')) : '沒有可選群組';
+          $('currentChatState').textContent = groups.length ? ('找到 ' + groups.length + ' 個本機群組；最後訊息時間來自 LINE 同步資料') : 'LINE 尚未同步群組聊天資料';
+          $('chatTarget').classList.toggle('detected', groups.length > 0);
+          $('groupHint').textContent = '群組清單直接讀取 LINE 本機資料庫；可選擇已同步的聊天室，不必打開 LINE 視窗。';
+          if (importedTranscript) {
+            importedTranscript = null;
+            importedGroupName = null;
+            $('fileInput').value = '';
+            $('importState').classList.remove('visible');
+          }
+          setStatus(groups.length ? '群組已載入，選擇群組與日期範圍後即可摘要。' : '資料庫已讀取，但目前沒有已同步的群組。', groups.length ? 'success' : '');
+        } catch (error) {
+          $('currentChatName').textContent = '無法載入群組';
+          $('currentChatState').textContent = '請確認 LINE 已登入，並查看本機日誌';
+          $('chatTarget').classList.add('error');
+          setStatus(error.message, 'error');
+        } finally {
+          groupScanBusy = false;
+          $('loadGroupsButton').disabled = !memoryReadConsented;
+          $('refreshGroupsButton').disabled = !memoryReadConsented;
+          enableRunIfPossible();
+        }
+      }
+      function updateSelectedGroup() {
+        const select = $('groupSelect');
+        const option = select.options[select.selectedIndex];
+        selectedGroupId = select.value;
+        selectedGroupName = option && option.dataset.name || '';
+        if (selectedGroupId) {
+          importedTranscript = null;
+          importedGroupName = null;
+          $('fileInput').value = '';
+          $('importState').classList.remove('visible');
+          $('currentChatName').textContent = selectedGroupName;
+          $('currentChatState').textContent = '已選取本機同步群組；不需開啟聊天室視窗';
+          $('chatTarget').classList.remove('error');
+          $('chatTarget').classList.add('detected');
+          setStatus('已選取「' + selectedGroupName + '」，選擇日期範圍後即可產生摘要。', 'success');
+        } else {
+          $('currentChatName').textContent = '尚未選取群組';
+          $('currentChatState').textContent = groupsLoaded ? '從清單選擇要整理的聊天室' : '尚未載入 LINE 群組';
+          $('chatTarget').classList.remove('detected', 'error');
+        }
+        enableRunIfPossible();
+      }
+      function displaySummary(data) {
+        lastSummary = data.summary || '';
+        $('emptyState').style.display = 'none';
+        renderSummary(lastSummary, $('summaryText'));
+        $('summaryText').classList.add('visible');
+        $('copyButton').classList.add('visible');
+        $('resultSubheading').textContent = '聊天大意已整理 · 參考 ' + data.count + ' 則訊息';
+        const meta = $('summaryMeta');
+        meta.innerHTML = '';
+        [data.groupName, data.count + ' 則訊息', data.start + ' 至 ' + data.end]
+          .forEach(function (value) {
+            const chip = document.createElement('span');
+            chip.className = 'meta-chip';
+            chip.textContent = value;
+            meta.appendChild(chip);
+          });
+        meta.classList.add('visible');
+      }
+      async function runSummary() {
+        if (busy || !apiAvailable) return;
+        if (!rangeStart || !rangeEnd) return setStatus('請先選擇摘要日期範圍。', 'error');
+        if (!importedTranscript && !selectedGroupId) return setStatus('請先載入並選擇 LINE 群組。', 'error');
+        if (!importedTranscript && !memoryReadConsented) return setStatus('請先確認本機讀取說明。', 'error');
+
+        setBusy(true, importedTranscript ? 'Codex 正在整理…' : '正在讀取群組並整理…');
+        $('copyButton').classList.remove('visible');
+        $('resultSubheading').textContent = '正在讀取聊天記錄並整理重點…';
+        setStatus(importedTranscript ? '正在篩選匯入檔的日期範圍並整理聊天大意…' : '正在唯讀所選群組的本機聊天資料…');
+        const body = {
+          groupName: importedTranscript ? importedGroupName : selectedGroupName,
+          chatId: importedTranscript ? undefined : selectedGroupId,
+          memoryConsent: memoryReadConsented,
+          start: dateKey(rangeStart) + 'T00:00:00',
+          end: dateKey(rangeEnd) + 'T23:59:59.999',
+          transcriptBase64: importedTranscript ? importedTranscript.base64 : undefined,
+          fileName: importedTranscript ? importedTranscript.name : undefined
+        };
+        try {
+          const result = await api('/api/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!result.data.ok) {
+            throw new Error(result.data.error || '摘要未完成。');
+          }
+          displaySummary(result.data);
+          setStatus(importedTranscript ? '摘要完成。匯入檔只使用暫存副本，原始檔未修改。' : '摘要完成；LINE 本機資料未修改。', 'success');
+        } catch (error) {
+          $('resultSubheading').textContent = '摘要尚未完成';
+          setStatus(error.message, 'error');
+        } finally {
+          setBusy(false);
+          enableRunIfPossible();
+        }
+      }
+      $('memoryConsent').addEventListener('change', function () {
+        memoryReadConsented = $('memoryConsent').checked;
+        enableRunIfPossible();
+      });
+      $('loadGroupsButton').addEventListener('click', function () { loadGroups(false); });
+      $('refreshGroupsButton').addEventListener('click', function () { loadGroups(true); });
+      $('groupSelect').addEventListener('change', updateSelectedGroup);
+      $('importButton').addEventListener('click', function () { $('fileInput').click(); });
+      $('fileInput').addEventListener('change', async function () {
+        const file = $('fileInput').files && $('fileInput').files[0];
+        if (!file) return;
+        try {
+          if (file.size > 40 * 1024 * 1024) throw new Error('單一聊天 TXT 限 40 MB，請縮小匯出範圍後重試。');
+          if (file.size === 0) throw new Error('選取的 TXT 是空白檔案。');
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = '';
+          const blockSize = 0x8000;
+          for (let offset = 0; offset < bytes.length; offset += blockSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(offset, Math.min(offset + blockSize, bytes.length)));
+          }
+          importedTranscript = { base64: btoa(binary), name: file.name };
+          const derivedName = file.name.replace(/\.txt$/i, '');
+          importedGroupName = derivedName;
+          selectedGroupId = '';
+          selectedGroupName = '';
+          $('groupSelect').value = '';
+          $('currentChatName').textContent = derivedName;
+          $('currentChatState').textContent = '使用匯入檔案進行日期篩選與摘要';
+          $('chatTarget').classList.remove('error');
+          $('chatTarget').classList.add('detected');
+          $('importState').textContent = '已載入 ' + file.name + '；匯入副本只暫存供本次分析，處理後清理。';
+          $('importState').classList.add('visible');
+          $('groupHint').textContent = '目前使用匯入檔。匯入檔不會被修改；重新選擇群組可切回本機資料庫。';
+          setStatus('TXT 已暫存，選擇日期範圍後即可產生摘要。');
+          enableRunIfPossible();
+        } catch (error) {
+          importedTranscript = null;
+          importedGroupName = null;
+          $('importState').classList.remove('visible');
+          setStatus(error.message, 'error');
+          enableRunIfPossible();
+        }
+      });
+      runButton.addEventListener('click', runSummary);
+      $('copyButton').addEventListener('click', async function () {
+        if (!lastSummary) return;
+        try {
+          await navigator.clipboard.writeText(lastSummary);
+          setStatus('摘要已複製到剪貼簿。', 'success');
+        } catch (_) {
+          const range = document.createRange();
+          range.selectNodeContents($('summaryText'));
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          setStatus('已選取摘要文字，可使用 Ctrl+C 複製。');
+        }
+      });
+
+      const today = new Date();
+      rangeEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      rangeStart = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate() - 6);
+      calendarView = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+      renderCalendar();
+      if (apiAvailable) {
+        loadStatus();
+        setInterval(function () {
+          fetch('/api/heartbeat', { method: 'POST', cache: 'no-store' }).catch(function () { });
+        }, 25000);
+      } else {
+        loadStatus();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+﻿LineChatSummary.exe
+*.log
+logs/
+data/
+exports/
+*_chat.txt
