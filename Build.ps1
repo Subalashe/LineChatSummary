@@ -5,9 +5,8 @@ $outputsRoot = Split-Path -Parent $packageRoot
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $runtimeZip = Join-Path $packageRoot 'LineChatSummary.DbRuntime.zip'
 $exePath = Join-Path $packageRoot 'LineChatSummary.exe'
-$distExe = Join-Path $outputsRoot 'LineChatSummary.exe'
-$distSetupExe = Join-Path $outputsRoot 'LineChatSummary-Setup.exe'
-$sourceZip = Join-Path $outputsRoot 'LineChatSummary-2.5.3.zip'
+$launcherExe = Join-Path $packageRoot 'LineChatSummary-Codex.exe'
+$sourceZip = Join-Path $outputsRoot 'LineChatSummary-Codex-Complete.zip'
 
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw "找不到 .NET Framework C# 編譯器：$compiler"
@@ -53,14 +52,12 @@ finally {
     Pop-Location
 }
 
-Copy-Item -LiteralPath $exePath -Destination $distExe -Force
-
 $setupArguments = @(
     '/nologo',
     '/target:winexe',
     '/platform:x64',
     '/optimize+',
-    '/out:..\LineChatSummary-Setup.exe',
+    '/out:LineChatSummary-Codex.exe',
     '/reference:System.Windows.Forms.dll',
     '/reference:System.Drawing.dll',
     '/reference:System.IO.Compression.dll',
@@ -78,8 +75,12 @@ finally {
     Pop-Location
 }
 
+if (Test-Path -LiteralPath $exePath) { Remove-Item -LiteralPath $exePath -Force }
+foreach ($duplicate in @('Setting.exe','LineChatSummary-Setup.exe','LineChatSummary-Setting.exe')) {
+    $duplicatePath = Join-Path $packageRoot $duplicate
+    if (Test-Path -LiteralPath $duplicatePath) { Remove-Item -LiteralPath $duplicatePath -Force }
+}
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $sourceZip -Force -CompressionLevel Optimal
 
-Write-Output "EXE: $distExe"
-Write-Output "一鍵安裝程式: $distSetupExe"
+Write-Output "唯一執行檔（首次安裝／之後啟動）: $launcherExe"
 Write-Output "維護套件: $sourceZip"

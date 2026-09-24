@@ -27,14 +27,14 @@
 
 ### 第一次安裝
 
-1. 雙擊 `LineChatSummary-Setup.exe`。安裝程式會安裝本工具；若找不到 Node.js 22 或更新版本，會從 Node.js 官方網站下載 Windows x64 壓縮包，驗證 SHA-256 後放到目前使用者的程式資料夾。
+1. 執行 `LineChatSummary-Codex.exe`。首次使用時，它會安裝本工具；若找不到 Node.js 22 或更新版本，會從 Node.js 官方網站下載 Windows x64 壓縮包，驗證 SHA-256 後放到目前使用者的程式資料夾。
 2. 安裝程式不安裝 LINE 或 Codex CLI，也不修改它們的登入資料。使用者需先自行安裝並登入這兩項程式。
-3. 安裝完成後會建立開始功能表捷徑並開啟工具。首次下載 Node.js 時需要網路；產生摘要時也需要連線到 Codex 服務。
+3. 安裝完成後會建立開始功能表捷徑並開啟工具。之後再次執行同一個 `LineChatSummary-Codex.exe` 會直接開啟已安裝的工具，不會重複安裝。首次下載 Node.js 時需要網路；產生摘要時也需要連線到 Codex 服務。
 
 ### 直接啟動
 
 1. 開啟並登入 LINE Windows 桌面版；不必維持聊天室視窗開啟。
-2. 雙擊 `LineChatSummary.exe`。若未使用一鍵安裝程式，電腦必須已有 Node.js 22 或更新版本。工具將介面、資料庫元件解壓到 `%LOCALAPPDATA%\LineChatSummary\web`，啟動只監聽 `127.0.0.1` 的本機服務，再開啟預設瀏覽器。
+2. 首次執行 `LineChatSummary-Codex.exe` 安裝；安裝後可再次執行同一個 `LineChatSummary-Codex.exe`，或從開始功能表開啟工具。主程式安裝在 `%LOCALAPPDATA%\Programs\LineChatSummary`，介面與資料庫元件會解壓到 `%LOCALAPPDATA%\LineChatSummary\web`。
 3. 勾選本機 LINE 記憶體讀取說明，按「載入群組」。首次掃描可能需要一段時間；載入後可按「重新載入」更新清單。
 4. 選擇群組與日期區間，按「產生聊天大意」。完成後摘要直接顯示在畫面右側，可複製摘要文字。
 5. 若本機資料庫無法讀取，可按「匯入 TXT 備用」選擇 LINE 手動儲存的聊天記錄。
@@ -74,7 +74,7 @@ HTML 來源為 `line-chat-summary-preview.html`。直接開啟 HTML 只能預覽
 
 ## 維護與重新建置
 
-維護套件包含 `Launcher.cs`、`SetupLauncher.cs`、`server.js`、`line-db.js`、PowerShell 資料庫掃描程式、HTML、資料庫原生元件壓縮檔與 `Build.ps1`。重新建置需要 Windows .NET Framework C# 編譯器。`Build.ps1` 會輸出 `LineChatSummary.exe`、`LineChatSummary-Setup.exe` 與版本維護 ZIP。
+維護套件包含 `Launcher.cs`、`SetupLauncher.cs`、`server.js`、`line-db.js`、PowerShell 資料庫掃描程式、HTML、資料庫原生元件壓縮檔與 `Build.ps1`。重新建置需要 Windows .NET Framework C# 編譯器。`Build.ps1` 會輸出唯一的 `LineChatSummary-Codex.exe`；它內含主程式，首次安裝後可重複用來啟動工具。
 
 在此資料夾執行：
 

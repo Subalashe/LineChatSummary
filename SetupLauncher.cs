@@ -13,6 +13,7 @@ using System.Windows.Forms;
 
 internal static class SetupLauncher
 {
+    private const string ProductVersion = "2.5.3";
     private const string NodeChecksumsUrl = "https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt";
     private const string NodeArchiveBaseUrl = "https://nodejs.org/dist/latest-v22.x/";
     private const string AppResourceName = "LineChatSummary.App";
@@ -28,6 +29,7 @@ internal static class SetupLauncher
     }
 
     private static string AppPath { get { return Path.Combine(InstallDirectory, "LineChatSummary.exe"); } }
+    private static string InstalledVersionPath { get { return Path.Combine(InstallDirectory, ".installed-version"); } }
 
     private static string LogPath
     {
@@ -45,6 +47,8 @@ internal static class SetupLauncher
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+
+        if (IsInstalled()) return LaunchInstalledApp();
 
         using (InstallProgressForm form = new InstallProgressForm())
             Application.Run(form);
@@ -66,6 +70,38 @@ internal static class SetupLauncher
             WriteLog("launch_failed", exception.GetType().Name + ": " + exception.Message);
             MessageBox.Show(
                 "安裝已完成，但無法自動開啟工具。請從開始功能表啟動「LINE 聊天摘要工具」。\r\n\r\n" + exception.Message,
+                "LINE 聊天摘要工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return 1;
+        }
+    }
+
+    private static bool IsInstalled()
+    {
+        try
+        {
+            return File.Exists(AppPath) && File.Exists(InstalledVersionPath) &&
+                String.Equals(File.ReadAllText(InstalledVersionPath).Trim(), ProductVersion, StringComparison.Ordinal) &&
+                FindCompatibleNode() != null;
+        }
+        catch { return false; }
+    }
+
+    private static int LaunchInstalledApp()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(AppPath)
+            {
+                WorkingDirectory = InstallDirectory,
+                UseShellExecute = true
+            });
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            WriteLog("launch_failed", exception.GetType().Name + ": " + exception.Message);
+            MessageBox.Show(
+                "無法開啟已安裝的工具。請重新執行 LineChatSummary-Codex.exe 修復安裝。\r\n\r\n" + exception.Message,
                 "LINE 聊天摘要工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return 1;
         }
@@ -98,7 +134,9 @@ internal static class SetupLauncher
             try { CreateStartMenuShortcut(AppPath); }
             catch (Exception exception) { WriteLog("shortcut_warning", exception.GetType().Name); }
 
-            WriteLog("install_complete", "nodeSource=" + nodeSource + " codexAndLine=not_installed");
+            File.WriteAllText(InstalledVersionPath, ProductVersion, new UTF8Encoding(false));
+
+            WriteLog("install_complete", "version=" + ProductVersion + " nodeSource=" + nodeSource + " codexAndLine=not_installed");
             setStatus("安裝完成，正在開啟工具…");
         }
         catch (Exception exception)
