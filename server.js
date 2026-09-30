@@ -9,7 +9,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const lineDb = require('./line-db');
 
 const PORT = Number(process.env.LINE_CHAT_SUMMARY_PORT || 48745);
-const APP_VERSION = '2.5.3';
+const APP_VERSION = '2.6.5';
 const PROFILE = process.env.USERPROFILE || os.homedir();
 const CODEX_HOME = process.env.CODEX_HOME || path.join(PROFILE, '.codex');
 const SCRIPT_PATH = path.join(__dirname, 'LineChatSummary.ps1');
@@ -359,17 +359,18 @@ async function handle(req, res) {
   }
   if (req.method === 'GET' && url.pathname === '/api/groups') {
     const scanStarted = Date.now();
-    if (url.searchParams.get('memoryConsent') !== '1') {
-      return response(res, 428, { ok: false, error: '讀取 LINE 本機資料前，請先確認記憶體讀取說明。' });
-    }
     try {
-      if (url.searchParams.get('refresh') === '1') lineDb.reset();
+      if (url.searchParams.get('refresh') === '1') {
+        lineDb.reset();
+      }
       const ready = await lineDb.ensureReady(() => runPowerShell('ScanDbKeys', null, 180000, DB_SCRIPT_PATH, true));
       const groups = lineDb.listGroups();
-      writeLog('Local LINE database opened readOnly=true groups=' + groups.length + ' lineVersion=' + (ready.lineVersion || 'unknown') + ' scannedProcesses=' + ready.scannedProcessCount + ' candidates=' + ready.candidateCount + ' keyAttempts=' + ready.keyAttempts + ' databases=' + ready.databaseCount + ' durationMs=' + (Date.now() - scanStarted));
+      writeLog('Local LINE database opened readOnly=true groups=' + groups.length + ' lineVersion=' + (ready.lineVersion || 'unknown') + ' scannedProcesses=' + ready.scannedProcessCount + ' candidates=' + ready.candidateCount + ' candidateLimitReached=' + Boolean(ready.candidateLimitReached) + ' keyAttempts=' + ready.keyAttempts + ' databases=' + ready.databaseCount + ' memoryScanMs=' + ready.memoryScanMs + ' unlockMs=' + ready.unlockMs + ' reusedScanCache=' + ready.reusedScanCache + ' durationMs=' + (Date.now() - scanStarted));
       return response(res, 200, { ok: true, groups, source: 'local-database', firstScan: Date.now() - scanStarted > 5000 });
     } catch (error) {
-      writeLog('Local LINE database open failed category=' + (error.status || 'runtime') + ' durationMs=' + (Date.now() - scanStarted) + ' detail=' + safeSensitiveDiagnostic(error.message), 'ERROR');
+      const stats = error.lineDbStats || {};
+      const diagnosticStats = error.lineDbStats ? ' scannedProcesses=' + (stats.scannedProcessCount || 0) + ' candidates=' + (stats.candidateCount || 0) + ' candidateLimitReached=' + Boolean(stats.candidateLimitReached) + ' keyAttempts=' + (stats.keyAttempts || 0) + ' databases=' + (stats.databaseCount || 0) + ' memoryScanMs=' + (stats.memoryScanMs || 0) + ' unlockMs=' + (stats.unlockMs || 0) + ' reusedScanCache=' + Boolean(stats.reusedScanCache) : '';
+      writeLog('Local LINE database open failed category=' + (error.status || 'runtime') + ' durationMs=' + (Date.now() - scanStarted) + diagnosticStats + ' detail=' + safeSensitiveDiagnostic(error.message), 'ERROR');
       return response(res, error.status || 500, { ok: false, error: error.message });
     }
   }
@@ -400,7 +401,6 @@ async function handle(req, res) {
         }, 120000);
         writeLog('Imported transcript prepared messages=' + prepared.count + ' chars=' + prepared.text.length);
       } else {
-        if (body.memoryConsent !== true) return response(res, 428, { ok: false, error: '請先確認本機 LINE 記憶體讀取說明。' });
         if (!body.chatId) return response(res, 400, { ok: false, error: '請先選擇 LINE 群組。' });
         await lineDb.ensureReady(() => runPowerShell('ScanDbKeys', null, 180000, DB_SCRIPT_PATH, true));
         const group = lineDb.listGroups().find(item => item.id === String(body.chatId));

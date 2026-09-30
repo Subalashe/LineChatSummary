@@ -1677,8 +1677,13 @@ function Invoke-ModePrepareSummary {
     if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw '找不到聊天 TXT，請重新匯入。' }
     if ([string]::IsNullOrWhiteSpace($groupName)) { $groupName = [System.IO.Path]::GetFileNameWithoutExtension($sourcePath) }
     $start = [datetime]::Parse([string]$Request.start, [Globalization.CultureInfo]::InvariantCulture)
-    $end = [datetime]::Parse([string]$Request.end, [Globalization.CultureInfo]::InvariantCulture)
-    $end = $end.AddMinutes(1).AddTicks(-1)
+    $endInput = [string]$Request.end
+    $end = [datetime]::Parse($endInput, [Globalization.CultureInfo]::InvariantCulture)
+    if ($endInput -match '^\d{4}-\d{2}-\d{2}$') {
+        $end = $end.Date.AddDays(1).AddTicks(-1)
+    } elseif ($endInput -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$') {
+        $end = $end.AddMinutes(1).AddTicks(-1)
+    }
     if ($end -lt $start) { throw '結束時間必須晚於開始時間。' }
     $loadStarted = Get-Date
     $text = Get-TranscriptText -Path $sourcePath

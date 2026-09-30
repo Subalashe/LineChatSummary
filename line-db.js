@@ -167,23 +167,53 @@ async function ensureReady(scanMemory) {
   if (activeDb) return { databasePath: activeDbPath, lineVersion: activeLineVersion, ...activeScanStats };
   if (initialization) return initialization;
   initialization = (async () => {
-    const discovery = await scanMemory();
-    if (!discovery || !discovery.ok) throw new Error((discovery && discovery.error) || '無法檢查 LINE 本機資料庫。');
+    let discovery;
+    const scanStarted = Date.now();
+    let memoryScanMs = 0;
+    try {
+      discovery = await scanMemory();
+      memoryScanMs = Date.now() - scanStarted;
+    } catch (error) {
+      error.lineDbStats = { memoryScanMs: Date.now() - scanStarted, reusedScanCache: false };
+      throw error;
+    }
+    if (!discovery || !discovery.ok) {
+      clearDiscovery(discovery);
+      const error = new Error((discovery && discovery.error) || '無法檢查 LINE 本機資料庫。');
+      error.lineDbStats = { memoryScanMs, reusedScanCache: false };
+      throw error;
+    }
     const candidates = Array.isArray(discovery.candidates) ? discovery.candidates : [];
+    const candidateCount = candidates.length;
+    const candidateLimitReached = Boolean(discovery.candidateLimitReached);
     const paths = Array.isArray(discovery.databasePaths) ? discovery.databasePaths.filter(item => typeof item === 'string') : [];
-    if (!paths.length) throw new Error('找不到 LINE 聊天資料庫。請確認 LINE 已登入。');
-    if (!candidates.length) throw new Error('LINE 記憶體中沒有找到資料庫解鎖候選值。請確認 LINE 已登入，並重新載入群組。');
+    if (!paths.length) {
+      clearDiscovery(discovery);
+      const error = new Error('找不到 LINE 聊天資料庫。請確認 LINE 已登入。');
+      error.lineDbStats = { scannedProcessCount: Number(discovery.scannedProcessCount || 0), candidateCount, databaseCount: 0, keyAttempts: 0, memoryScanMs, unlockMs: 0, reusedScanCache: false, candidateLimitReached };
+      throw error;
+    }
+    if (!candidates.length) {
+      clearDiscovery(discovery);
+      const error = new Error('LINE 記憶體中沒有找到資料庫解鎖候選值。請確認 LINE 已登入，並重新載入群組。');
+      error.lineDbStats = { scannedProcessCount: Number(discovery.scannedProcessCount || 0), candidateCount: 0, databaseCount: paths.length, keyAttempts: 0, memoryScanMs, unlockMs: 0, reusedScanCache: false, candidateLimitReached };
+      throw error;
+    }
 
     let matched = false;
     let keyAttempts = 0;
     let databaseAttempts = 0;
+    const unlockStarted = Date.now();
+    let unlockMs = 0;
+    const existingPaths = paths.filter(dbPath => fs.existsSync(dbPath));
     try {
-      for (const dbPath of paths) {
-        if (!fs.existsSync(dbPath)) continue;
-        databaseAttempts++;
-        for (const candidate of candidates) {
-          const keyText = String(candidate && candidate.value || '');
-          if (!/^[0-9a-f]{32}$/i.test(keyText)) continue;
+      databaseAttempts = existingPaths.length;
+      // Test each key against the likely database files before moving to the next key.
+      // This can stop early when the matching database is not the first file by size.
+      for (const candidate of candidates) {
+        const keyText = String(candidate && candidate.value || '');
+        if (!/^[0-9a-f]{32}$/i.test(keyText)) continue;
+        for (const dbPath of existingPaths) {
           keyAttempts++;
           try {
             activeDb = newEncryptedConnection(dbPath, keyText);
@@ -194,21 +224,37 @@ async function ensureReady(scanMemory) {
           } catch (_) {
             // Candidate values and database errors are intentionally never logged.
           }
+          if (matched) break;
         }
         if (matched) break;
       }
     } finally {
-      for (const candidate of candidates) {
-        if (candidate && typeof candidate.value === 'string') candidate.value = '';
-      }
-      discovery.candidates = [];
+      unlockMs = Date.now() - unlockStarted;
+      clearDiscovery(discovery);
     }
-    if (!matched) throw new Error('已掃描 ' + keyAttempts + ' 個候選值及 ' + databaseAttempts + ' 個資料庫檔，但無法解鎖。請保持 LINE 登入後按「重新載入群組」；LINE 更新可能改變加密格式。');
+    if (!matched) {
+      const error = new Error('已掃描 ' + keyAttempts + ' 個候選值及 ' + databaseAttempts + ' 個資料庫檔，但無法解鎖。請保持 LINE 登入後按「重新載入群組」；LINE 更新可能改變加密格式。');
+      error.lineDbStats = {
+        scannedProcessCount: Number(discovery.scannedProcessCount || 0),
+        candidateCount,
+        databaseCount: databaseAttempts,
+        keyAttempts,
+        memoryScanMs,
+        unlockMs,
+        reusedScanCache: false,
+        candidateLimitReached
+      };
+      throw error;
+    }
     activeScanStats = {
       scannedProcessCount: Number(discovery.scannedProcessCount || 0),
-      candidateCount: candidates.length,
+      candidateCount,
       databaseCount: databaseAttempts,
-      keyAttempts
+      keyAttempts,
+      memoryScanMs,
+      unlockMs: Date.now() - unlockStarted,
+      reusedScanCache: false,
+      candidateLimitReached
     };
     return {
       databasePath: activeDbPath,
@@ -218,6 +264,14 @@ async function ensureReady(scanMemory) {
   })();
   try { return await initialization; }
   finally { initialization = null; }
+}
+
+function clearDiscovery(discovery) {
+  if (!discovery || !Array.isArray(discovery.candidates)) return;
+  for (const candidate of discovery.candidates) {
+    if (candidate && typeof candidate.value === 'string') candidate.value = '';
+  }
+  discovery.candidates = [];
 }
 
 function reset() {
@@ -254,7 +308,9 @@ function getMessages(chatId, start, end) {
   const maxTime = Number(activeDb.prepare('SELECT MAX("_createdTime") AS value FROM _message').get().value || 0);
   const timeScale = maxTime > 0 && maxTime < 1000000000000 ? 0.001 : (maxTime >= 100000000000000 ? 1000 : 1);
   const storedFrom = Math.floor(fromMs * timeScale);
-  const storedUntil = Math.ceil(untilMs * timeScale);
+  // The UI sends the millisecond immediately before the exclusive end boundary.
+  // Floor is required for second-resolution databases so rounding cannot include the cutoff hour.
+  const storedUntil = Math.floor(untilMs * timeScale);
   const count = Number(activeDb.prepare(
     'SELECT COUNT(*) AS count FROM _message WHERE _chatId = ? AND _createdTime >= ? AND _createdTime <= ?'
   ).get(id, storedFrom, storedUntil).count || 0);

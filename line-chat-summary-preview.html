@@ -205,9 +205,21 @@
     .day.muted button { color: #c1cac5; }
     .calendar-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; border-top: 1px solid #edf1ee; padding-top: 11px; color: #89978f; font-size: 10px; }
     .calendar-foot strong { color: #315742; font-weight: 650; }
+    .time-filter { margin-top: 15px; border: 1px solid #e4ebe6; border-radius: 12px; padding: 12px; background: linear-gradient(135deg,#fbfdfb,#f6faf7); }
+    .time-filter-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .time-filter-head strong { color: #344b40; font-size: 12px; }
+    .time-filter-head span { color: #8b9b93; font-size: 10px; }
+    .time-inputs { display: grid; grid-template-columns: minmax(0,1fr) 22px minmax(0,1fr); align-items: end; gap: 7px; }
+    .time-input-wrap { display: grid; gap: 5px; }
+    .time-input-wrap label { color: #728379; font-size: 10px; font-weight: 600; }
+    .hour-select { width: 100%; min-width: 0; height: 38px; border: 1px solid #dce6df; border-radius: 8px; padding: 0 9px; color: #1f342a; background: white; font-variant-numeric: tabular-nums; }
+    .hour-select:focus { border-color: #3b9c6c; outline: none; box-shadow: 0 0 0 3px rgba(37,139,88,.12); }
+    .time-separator { padding-bottom: 10px; color: #9aa8a1; text-align: center; }
+    .time-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .time-presets button { min-height: 27px; border: 1px solid #e0e9e3; border-radius: 7px; padding: 0 9px; color: #5c7065; background: #fff; font-size: 10px; }
+    .time-presets button:hover, .time-presets button.active { border-color: #a8d8bd; color: #148454; background: #f0faf4; }
+    .selected-interval { margin-top: 9px; border-radius: 8px; padding: 8px 9px; color: #426451; background: #eaf6ee; font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1.5; }
     .temp-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 15px; color: #6e8176; font-size: 10px; line-height: 1.6; }
-    .memory-consent { margin-top: 12px; }
-    .memory-consent input { width: 14px; height: 14px; flex: 0 0 auto; margin: 1px 0 0; accent-color: #188452; }
     .temp-note .check { display: grid; width: 17px; height: 17px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #218a5b; background: #e4f4e9; font-size: 10px; font-weight: 800; }
     .notice {
       display: flex;
@@ -358,7 +370,7 @@
           </div>
           <div class="input-row">
             <select id="groupSelect" disabled aria-label="選擇 LINE 群組">
-              <option value="">先確認讀取方式，再載入群組</option>
+              <option value="">正在自動載入 LINE 群組…</option>
             </select>
             <button class="outline-button" id="refreshGroupsButton" type="button" disabled>重新載入</button>
           </div>
@@ -371,10 +383,6 @@
             <span class="chat-target-status" id="chatTargetStatus" aria-hidden="true"></span>
           </div>
           <p class="hint" id="groupHint">讀取 LINE 本機同步的群組清單與訊息，不需開啟聊天室或操作 LINE 視窗。</p>
-          <label class="temp-note memory-consent" for="memoryConsent">
-            <input id="memoryConsent" type="checkbox">
-            <span>我了解工具會以唯讀方式檢查目前登入的 LINE 程序記憶體，尋找本機資料庫解鎖資訊；候選值只在本機處理，不寫入檔案或日誌。</span>
-          </label>
           <div class="source-actions">
             <button class="outline-button import-button" id="importButton" type="button">匯入 TXT 備用</button>
             <input id="fileInput" type="file" accept=".txt,text/plain">
@@ -383,23 +391,39 @@
         </div>
 
         <div class="field range-wrap">
-          <div class="field-head"><span class="field-label">摘要日期範圍</span><span class="step-label">依訊息日期篩選</span></div>
+          <div class="field-head"><span class="field-label">摘要日期範圍</span><span class="step-label">先選日期，再選時分</span></div>
           <button class="range-display" id="rangeDisplay" type="button" aria-expanded="false" aria-controls="rangeCalendar">
             <strong id="rangeText">載入日期範圍…</strong><span aria-hidden="true">▦</span>
           </button>
           <div class="range-calendar closed" id="rangeCalendar">
             <div class="calendar-head">
               <div class="quick-ranges" role="group" aria-label="快速日期範圍">
-                <button type="button" data-days="7" class="active">近 7 天</button>
+                <button type="button" data-days="1" class="active">今天</button>
+                <button type="button" data-days="7">近 7 天</button>
                 <button type="button" data-days="30">近 30 天</button>
                 <button type="button" data-days="custom">自訂</button>
               </div>
               <div class="calendar-nav"><button type="button" id="prevMonth" aria-label="前一個月">‹</button><button type="button" id="nextMonth" aria-label="後一個月">›</button></div>
             </div>
             <div class="months" id="calendarMonths"></div>
-            <div class="calendar-foot"><span>點選起訖日期，或按住拖曳選取</span><strong id="rangeHint">已選 7 天</strong></div>
+            <div class="calendar-foot"><span>點選起訖日期，或按住拖曳選取</span><strong id="rangeHint">已選 1 天</strong></div>
           </div>
-          <p class="hint">結果只整理此日期區間內的文字訊息，顯示幾個重點說明大致話題。</p>
+          <div class="time-filter" aria-label="摘要時間範圍">
+            <div class="time-filter-head"><strong>選擇訊息時段</strong><span>結束時間不包含該整點</span></div>
+            <div class="time-inputs">
+              <div class="time-input-wrap"><label for="startTime">開始時間</label><select id="startTime" class="hour-select" aria-label="開始時間（24 小時制整點）"></select></div>
+              <span class="time-separator" aria-hidden="true">至</span>
+              <div class="time-input-wrap"><label for="endTime">結束時間</label><select id="endTime" class="hour-select" aria-label="結束時間（不包含該整點）"></select></div>
+            </div>
+            <div class="time-presets" role="group" aria-label="快速選擇時段">
+              <button type="button" data-start="00:00" data-end="23:00" data-endofday="true">全天</button>
+              <button type="button" data-start="06:00" data-end="12:00">上午</button>
+              <button type="button" data-start="12:00" data-end="18:00">下午</button>
+              <button type="button" data-start="18:00" data-end="00:00" data-endofday="true">晚上</button>
+            </div>
+            <div class="selected-interval" id="selectedInterval">摘要時段：載入中…</div>
+          </div>
+          <p class="hint">結果只整理所選日期與時段內的文字訊息，顯示幾個重點說明大致話題。</p>
           <div class="temp-note"><span class="check" aria-hidden="true">✓</span><span>本機資料庫以唯讀方式查詢；工具不另存聊天 TXT 或聊天內容日誌。</span></div>
         </div>
 
@@ -412,7 +436,7 @@
           <span class="action-help">讀取已選群組與日期<br>摘要直接顯示在右側</span>
         </div>
         <div class="offline-banner" id="offlineBanner"></div>
-        <div class="status-line" id="statusLine" role="status" aria-live="polite">請先確認本機讀取說明，再載入 LINE 群組。</div>
+        <div class="status-line" id="statusLine" role="status" aria-live="polite">正在自動載入 LINE 群組…</div>
       </section>
 
       <section class="card result-card" id="resultCard" aria-labelledby="resultTitle">
@@ -461,6 +485,7 @@
       let rangeStart;
       let rangeEnd;
       let calendarView;
+      let endAtNextMidnight = false;
       let choosingEnd = false;
       let pointerRange = null;
       let importedTranscript = null;
@@ -468,8 +493,9 @@
       let selectedGroupId = '';
       let selectedGroupName = '';
       let groupsLoaded = false;
-      let memoryReadConsented = false;
       let groupScanBusy = false;
+      let groupRetryPending = false;
+      let lastGroupLoadRetryable = false;
       let busy = false;
       let lastSummary = '';
 
@@ -478,12 +504,34 @@
       function dateFromKey(key) { const parts = key.split('-').map(Number); return new Date(parts[0], parts[1] - 1, parts[2]); }
       function formatDate(date) { return date.getFullYear() + '/' + pad(date.getMonth() + 1) + '/' + pad(date.getDate()); }
       function sameDate(a, b) { return dateKey(a) === dateKey(b); }
+      function populateHourSelect(id, selectedTime) {
+        const select = $(id);
+        for (let hour = 0; hour < 24; hour++) {
+          const value = pad(hour) + ':00';
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          select.appendChild(option);
+        }
+        select.value = selectedTime;
+      }
+      function updateSelectedInterval(startDate, endDate) {
+        const start = startDate || rangeStart;
+        const end = endDate || rangeEnd;
+        if (!start || !end) return;
+        const first = start <= end ? start : end;
+        const last = start <= end ? end : start;
+        const startTime = $('startTime').value || '00:00';
+        const endTime = endAtNextMidnight ? '24:00' : ($('endTime').value || '18:00');
+        $('selectedInterval').textContent = '摘要時段：' + formatDate(first) + ' ' + startTime + '　—　' + formatDate(last) + ' ' + endTime;
+      }
       function updateRangeDisplay(previewEnd) {
         const end = previewEnd || rangeEnd;
         const first = rangeStart <= end ? rangeStart : end;
         const last = rangeStart <= end ? end : rangeStart;
         $('rangeText').textContent = formatDate(first) + '　—　' + formatDate(last);
         $('rangeHint').textContent = '已選 ' + (Math.round((last - first) / 86400000) + 1) + ' 天';
+        updateSelectedInterval(first, last);
       }
       function markCustomRange() {
         document.querySelectorAll('.quick-ranges button').forEach(function (button) {
@@ -627,6 +675,22 @@
         calendar.classList.toggle('closed', !opening);
         $('rangeDisplay').setAttribute('aria-expanded', String(opening));
       });
+      document.querySelectorAll('.time-presets button').forEach(function (button) {
+        button.addEventListener('click', function () {
+          $('startTime').value = button.dataset.start;
+          $('endTime').value = button.dataset.end;
+          endAtNextMidnight = button.dataset.endofday === 'true';
+          document.querySelectorAll('.time-presets button').forEach(function (item) { item.classList.toggle('active', item === button); });
+          updateSelectedInterval();
+        });
+      });
+      ['startTime', 'endTime'].forEach(function (id) {
+        $(id).addEventListener('change', function () {
+          endAtNextMidnight = false;
+          document.querySelectorAll('.time-presets button').forEach(function (button) { button.classList.remove('active'); });
+          updateSelectedInterval();
+        });
+      });
       document.addEventListener('click', function (event) {
         if ($('rangeCalendar').classList.contains('closed')) return;
         if ($('rangeCalendar').contains(event.target) || $('rangeDisplay').contains(event.target)) return;
@@ -645,14 +709,14 @@
       }
       function setBusy(value, label) {
         busy = value;
-        runButton.disabled = value || (!importedTranscript && (!selectedGroupId || !memoryReadConsented));
+        runButton.disabled = value || (!importedTranscript && !selectedGroupId);
         $('groupSelect').disabled = value || !groupsLoaded || $('groupSelect').options.length < 2;
         runButton.classList.toggle('loading', value);
         $('resultCard').classList.toggle('loading', value);
         $('runButtonText').textContent = label || (value ? 'Codex 正在整理…' : '產生聊天大意');
-        $('loadGroupsButton').disabled = value || groupScanBusy || !memoryReadConsented;
-        $('refreshGroupsButton').disabled = value || groupScanBusy || !memoryReadConsented;
-        $('importButton').disabled = value;
+        $('loadGroupsButton').disabled = value || groupScanBusy || groupRetryPending;
+        $('refreshGroupsButton').disabled = value || groupScanBusy || groupRetryPending;
+        $('importButton').disabled = value || groupRetryPending;
       }
       function setConnection(ok, text) {
         const badge = $('codexStatus');
@@ -661,10 +725,10 @@
         $('codexStatusText').textContent = text;
       }
       function enableRunIfPossible() {
-        if (!busy) runButton.disabled = !importedTranscript && (!selectedGroupId || !memoryReadConsented);
-        $('groupSelect').disabled = busy || !groupsLoaded || $('groupSelect').options.length < 2;
-        $('loadGroupsButton').disabled = !apiAvailable || busy || groupScanBusy || !memoryReadConsented;
-        $('refreshGroupsButton').disabled = !apiAvailable || busy || groupScanBusy || !memoryReadConsented;
+        if (!busy) runButton.disabled = !importedTranscript && !selectedGroupId;
+        $('groupSelect').disabled = busy || groupRetryPending || !groupsLoaded || $('groupSelect').options.length < 2;
+        $('loadGroupsButton').disabled = !apiAvailable || busy || groupScanBusy || groupRetryPending;
+        $('refreshGroupsButton').disabled = !apiAvailable || busy || groupScanBusy || groupRetryPending;
       }
       async function api(path, options) {
         const response = await fetch(path, Object.assign({ cache: 'no-store' }, options || {}));
@@ -771,8 +835,8 @@
         }
       }
       async function loadGroups(refresh) {
-        if (!apiAvailable || busy || groupScanBusy) return;
-        if (!memoryReadConsented) return setStatus('請先勾選本機記憶體讀取說明，再載入 LINE 群組。', 'error');
+        if (!apiAvailable || busy || groupScanBusy) return false;
+        lastGroupLoadRetryable = false;
         groupScanBusy = true;
         $('loadGroupsButton').disabled = true;
         $('refreshGroupsButton').disabled = true;
@@ -780,7 +844,7 @@
         $('chatTarget').classList.remove('error');
         setStatus('正在從 LINE 本機資料庫讀取群組；不操作 LINE 視窗，聊天室可縮小…');
         try {
-          const query = '?memoryConsent=1' + (refresh ? '&refresh=1' : '');
+          const query = refresh ? '?refresh=1' : '';
           const result = await api('/api/groups' + query);
           if (!result.data.ok) throw new Error(result.data.error || '無法讀取 LINE 群組。');
           const groups = Array.isArray(result.data.groups) ? result.data.groups : [];
@@ -815,16 +879,34 @@
             $('importState').classList.remove('visible');
           }
           setStatus(groups.length ? '群組已載入，選擇群組與日期範圍後即可摘要。' : '資料庫已讀取，但目前沒有已同步的群組。', groups.length ? 'success' : '');
+          return true;
         } catch (error) {
           $('currentChatName').textContent = '無法載入群組';
           $('currentChatState').textContent = '請確認 LINE 已登入，並查看本機日誌';
           $('chatTarget').classList.add('error');
           setStatus(error.message, 'error');
+          lastGroupLoadRetryable = /資料庫解鎖|無法解鎖/.test(error.message);
+          return false;
         } finally {
           groupScanBusy = false;
-          $('loadGroupsButton').disabled = !memoryReadConsented;
-          $('refreshGroupsButton').disabled = !memoryReadConsented;
           enableRunIfPossible();
+        }
+      }
+      async function loadGroupsAutomatically() {
+        const maxAttempts = 3;
+        setStatus('等待 LINE 完成啟動，10 秒後自動載入群組…');
+        await new Promise(function (resolve) { setTimeout(resolve, 10000); });
+        while (groupScanBusy) await new Promise(function (resolve) { setTimeout(resolve, 500); });
+        if (groupsLoaded) return;
+        let loaded = await loadGroups(false);
+        for (let attempt = 2; !loaded && lastGroupLoadRetryable && attempt <= maxAttempts; attempt++) {
+          groupRetryPending = true;
+          enableRunIfPossible();
+          setStatus('LINE 資料尚未解鎖，將自動重試（第 ' + attempt + '/' + maxAttempts + ' 次）…');
+          await new Promise(function (resolve) { setTimeout(resolve, 12000); });
+          groupRetryPending = false;
+          enableRunIfPossible();
+          loaded = await loadGroups(true);
         }
       }
       function updateSelectedGroup() {
@@ -870,8 +952,18 @@
       async function runSummary() {
         if (busy || !apiAvailable) return;
         if (!rangeStart || !rangeEnd) return setStatus('請先選擇摘要日期範圍。', 'error');
+        const startTime = $('startTime').value;
+        const endTime = $('endTime').value;
+        if (!startTime || !endTime) return setStatus('請設定開始與結束時間。', 'error');
+        const startParts = startTime.split(':').map(Number);
+        const endParts = endTime.split(':').map(Number);
+        const selectedStart = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate(), startParts[0], startParts[1]);
+        const selectedEndExclusive = endAtNextMidnight
+          ? new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate() + 1, 0, 0, 0, 0)
+          : new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate(), endParts[0], 0, 0, 0);
+        if (selectedEndExclusive <= selectedStart) return setStatus('結束日期與時間必須晚於開始日期與時間。', 'error');
+        const inclusiveEnd = new Date(selectedEndExclusive.getTime() - 1);
         if (!importedTranscript && !selectedGroupId) return setStatus('請先載入並選擇 LINE 群組。', 'error');
-        if (!importedTranscript && !memoryReadConsented) return setStatus('請先確認本機讀取說明。', 'error');
 
         setBusy(true, importedTranscript ? 'Codex 正在整理…' : '正在讀取群組並整理…');
         $('copyButton').classList.remove('visible');
@@ -880,9 +972,8 @@
         const body = {
           groupName: importedTranscript ? importedGroupName : selectedGroupName,
           chatId: importedTranscript ? undefined : selectedGroupId,
-          memoryConsent: memoryReadConsented,
-          start: dateKey(rangeStart) + 'T00:00:00',
-          end: dateKey(rangeEnd) + 'T23:59:59.999',
+          start: dateKey(rangeStart) + 'T' + startTime + ':00',
+          end: dateKey(inclusiveEnd) + 'T' + pad(inclusiveEnd.getHours()) + ':' + pad(inclusiveEnd.getMinutes()) + ':' + pad(inclusiveEnd.getSeconds()) + '.' + String(inclusiveEnd.getMilliseconds()).padStart(3, '0'),
           transcriptBase64: importedTranscript ? importedTranscript.base64 : undefined,
           fileName: importedTranscript ? importedTranscript.name : undefined
         };
@@ -905,11 +996,7 @@
           enableRunIfPossible();
         }
       }
-      $('memoryConsent').addEventListener('change', function () {
-        memoryReadConsented = $('memoryConsent').checked;
-        enableRunIfPossible();
-      });
-      $('loadGroupsButton').addEventListener('click', function () { loadGroups(false); });
+      $('loadGroupsButton').addEventListener('click', function () { loadGroups(true); });
       $('refreshGroupsButton').addEventListener('click', function () { loadGroups(true); });
       $('groupSelect').addEventListener('change', updateSelectedGroup);
       $('importButton').addEventListener('click', function () { $('fileInput').click(); });
@@ -965,12 +1052,15 @@
       });
 
       const today = new Date();
+      populateHourSelect('startTime', '14:00');
+      populateHourSelect('endTime', '18:00');
       rangeEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      rangeStart = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate() - 6);
+      rangeStart = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate());
       calendarView = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
       renderCalendar();
       if (apiAvailable) {
         loadStatus();
+        loadGroupsAutomatically();
         setInterval(function () {
           fetch('/api/heartbeat', { method: 'POST', cache: 'no-store' }).catch(function () { });
         }, 25000);

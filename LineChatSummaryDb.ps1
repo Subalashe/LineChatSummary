@@ -199,10 +199,12 @@ public static class LineChatSummaryKeyScanner {
     if ($lineProcesses.Count -eq 0) { throw '找不到 LINE.exe。請先開啟並登入 LINE 桌面版。' }
     $allCandidates = New-Object 'System.Collections.Generic.Dictionary[string,int]'
     $scannedProcessCount = 0
+    $candidateScanLimitReached = $false
     foreach ($process in $lineProcesses) {
         try {
             $candidates = [LineChatSummaryKeyScanner]::Scan([int]$process.Id, 4096)
             $scannedProcessCount++
+            if ($candidates.Count -ge 4096) { $candidateScanLimitReached = $true }
         } catch {
             continue
         }
@@ -228,6 +230,7 @@ public static class LineChatSummaryKeyScanner {
         candidates = $ordered
         scannedProcessCount = $scannedProcessCount
         candidateCount = $ordered.Count
+        candidateLimitReached = ($candidateScanLimitReached -or $ordered.Count -ge 4096)
         lineVersion = $version
     } | ConvertTo-Json -Compress -Depth 4
 } catch {

@@ -13,7 +13,7 @@ using System.Windows.Forms;
 
 internal static class SetupLauncher
 {
-    private const string ProductVersion = "2.5.3";
+    private const string ProductVersion = "2.6.5";
     private const string NodeChecksumsUrl = "https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt";
     private const string NodeArchiveBaseUrl = "https://nodejs.org/dist/latest-v22.x/";
     private const string AppResourceName = "LineChatSummary.App";
@@ -255,7 +255,7 @@ internal static class SetupLauncher
     private static WebClient CreateWebClient()
     {
         WebClient client = new WebClient();
-        client.Headers[HttpRequestHeader.UserAgent] = "LineChatSummarySetup/2.5.3";
+        client.Headers[HttpRequestHeader.UserAgent] = "LineChatSummarySetup/2.6.5";
         return client;
     }
 
