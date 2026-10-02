@@ -11,9 +11,9 @@ using System.Windows.Forms;
 
 internal static class Launcher
 {
-    private const int Port = 48753;
-    private const string AppUrl = "http://127.0.0.1:48753/";
-    private const string ExpectedServerVersion = "2.6.12";
+    private const int Port = 48754;
+    private const string AppUrl = "http://127.0.0.1:48754/";
+    private const string ExpectedServerVersion = "2.6.15";
     private const string RuntimeVersion = "better-sqlite3-multiple-ciphers@13.0.3";
 
     [STAThread]

@@ -13,7 +13,7 @@ using System.Windows.Forms;
 
 internal static class SetupLauncher
 {
-    private const string ProductVersion = "2.6.12";
+    private const string ProductVersion = "2.6.15";
     private const string NodeChecksumsUrl = "https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt";
     private const string NodeArchiveBaseUrl = "https://nodejs.org/dist/latest-v22.x/";
     private const string AppResourceName = "LineChatSummary.App";

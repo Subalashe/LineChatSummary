@@ -8,8 +8,15 @@ const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
 const lineDb = require('./line-db');
 
-const PORT = Number(process.env.LINE_CHAT_SUMMARY_PORT || 48753);
-const APP_VERSION = '2.6.12';
+const PORT = Number(process.env.LINE_CHAT_SUMMARY_PORT || 48754);
+const APP_VERSION = '2.6.15';
+const DEFAULT_CODEX_MODEL = 'gpt-6-luna';
+const DEFAULT_CODEX_REASONING_EFFORT = 'max';
+const CODEX_MODELS = Object.freeze({
+  'gpt-6-luna': Object.freeze({ label: 'GPT-6 Luna', efforts: Object.freeze(['none', 'low', 'medium', 'high', 'xhigh', 'max']) }),
+  'gpt-6.1-sol': Object.freeze({ label: 'GPT-6.1 Sol', efforts: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']) }),
+  'gpt-6-astra': Object.freeze({ label: 'GPT-6 Astra', efforts: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max']) })
+});
 const PROFILE = process.env.USERPROFILE || os.homedir();
 const CODEX_HOME = process.env.CODEX_HOME || path.join(PROFILE, '.codex');
 const SCRIPT_PATH = path.join(__dirname, 'LineChatSummary.ps1');
@@ -242,7 +249,7 @@ function runPowerShell(mode, requestObject, timeoutMs = 60000, scriptPath = SCRI
   });
 }
 
-function runCodex(prompt, runDir, timeoutMs = 300000) {
+function runCodex(prompt, runDir, model, reasoningEffort, timeoutMs = 300000) {
   const executable = resolveCodexPath();
   if (!executable) throw new Error('找不到 Codex CLI。請確認 Codex 已安裝，並在此 Windows 帳號登入。');
   const outputPath = path.join(runDir, crypto.randomUUID() + '.md');
@@ -251,7 +258,8 @@ function runCodex(prompt, runDir, timeoutMs = 300000) {
     '--ephemeral',
     '--skip-git-repo-check',
     '--sandbox', 'read-only',
-    '--model', 'gpt-6-sol',
+    '--model', model,
+    '-c', 'model_reasoning_effort="' + reasoningEffort + '"',
     '--json',
     '--color', 'never',
     '--output-last-message', outputPath,
@@ -376,23 +384,23 @@ function makePrompt(data, final = false) {
   ].join('\n\n');
 }
 
-async function summarizeWithCodex(text) {
+async function summarizeWithCodex(text, model, reasoningEffort) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'line-chat-codex-'));
   try {
     const chunks = splitText(text, 80000);
     if (chunks.length > 20) throw new Error('所選範圍的文字量過大，請縮小摘要時間範圍。');
-    if (chunks.length === 1) return { summary: await runCodex(makePrompt(chunks[0], true), runDir), chunks: 1 };
+    if (chunks.length === 1) return { summary: await runCodex(makePrompt(chunks[0], true), runDir, model, reasoningEffort), chunks: 1 };
     const partials = new Array(chunks.length);
     let next = 0;
     async function worker() {
       while (next < chunks.length) {
         const index = next++;
         const partialPrompt = '第 ' + (index + 1) + '/' + chunks.length + ' 段聊天內容：\n\n' + makePrompt(chunks[index], false);
-        partials[index] = await runCodex(partialPrompt, runDir);
+        partials[index] = await runCodex(partialPrompt, runDir, model, reasoningEffort);
       }
     }
     await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, () => worker()));
-    return { summary: await runCodex(makePrompt(partials.join('\n\n'), true), runDir), chunks: chunks.length };
+    return { summary: await runCodex(makePrompt(partials.join('\n\n'), true), runDir, model, reasoningEffort), chunks: chunks.length };
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
   }
@@ -433,7 +441,9 @@ async function handle(req, res) {
       codexInstalled: true,
       codexLoggedIn: auth.loggedIn,
       loginMethod: auth.method,
-      model: 'gpt-6-sol'
+      model: DEFAULT_CODEX_MODEL,
+      reasoningEffort: DEFAULT_CODEX_REASONING_EFFORT,
+      modelLabel: CODEX_MODELS[DEFAULT_CODEX_MODEL].label + ' · 推理強度 ' + DEFAULT_CODEX_REASONING_EFFORT.toUpperCase()
     });
   }
   if (req.method === 'GET' && url.pathname === '/') {
@@ -467,8 +477,15 @@ async function handle(req, res) {
       const body = await readJson(req);
       const start = String(body.start || '');
       const end = String(body.end || '');
+      const model = String(body.model || DEFAULT_CODEX_MODEL).trim();
+      const reasoningEffort = String(body.reasoningEffort || DEFAULT_CODEX_REASONING_EFFORT).trim().toLowerCase();
       let groupName = String(body.groupName || '').trim();
       if (!start || !end) return response(res, 400, { ok: false, error: '請設定開始與結束時間。' });
+      const modelConfig = Object.prototype.hasOwnProperty.call(CODEX_MODELS, model) ? CODEX_MODELS[model] : null;
+      if (!modelConfig) return response(res, 400, { ok: false, error: '選取的 Codex 模型不在支援清單中。' });
+      if (modelConfig.efforts.indexOf(reasoningEffort) < 0) {
+        return response(res, 400, { ok: false, error: '此模型不支援所選的推理強度。' });
+      }
 
       let prepared;
       let sourcePath;
@@ -515,9 +532,9 @@ async function handle(req, res) {
       }
 
       const codexStarted = Date.now();
-      const codexResult = await summarizeWithCodex(prepared.text);
+      const codexResult = await summarizeWithCodex(prepared.text, model, reasoningEffort);
       const summary = codexResult.summary;
-      writeLog('Codex summary completed durationMs=' + (Date.now() - codexStarted) + ' chunks=' + codexResult.chunks);
+      writeLog('Codex summary completed model=' + model + ' reasoningEffort=' + reasoningEffort + ' durationMs=' + (Date.now() - codexStarted) + ' chunks=' + codexResult.chunks);
       writeLog('Summary completed messages=' + prepared.count + ' durationMs=' + (Date.now() - requestStarted));
       return response(res, 200, {
         ok: true,
@@ -534,7 +551,9 @@ async function handle(req, res) {
           selfMessages: Number(prepared.senderStats.selfMessages || 0)
         } : null,
         start: prepared.start,
-        end: prepared.end
+        end: prepared.end,
+        model,
+        reasoningEffort
       });
     } catch (error) {
       writeLog('Summary request failed category=' + (error.status || 'runtime') + ' durationMs=' + (Date.now() - requestStarted) + ' detail=' + safeDiagnostic(error.message), 'ERROR');
