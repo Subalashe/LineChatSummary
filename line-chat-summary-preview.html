@@ -74,6 +74,7 @@
     h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: .04em; }
     .subtitle { margin-top: 7px; color: rgba(255,255,255,.78); font-size: 14px; letter-spacing: .02em; }
     .hero-side { position: relative; z-index: 1; display: grid; justify-items: end; gap: 11px; }
+    .hero-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .engine-pill, .status-pill {
       display: inline-flex;
       align-items: center;
@@ -87,6 +88,18 @@
       white-space: nowrap;
     }
     .engine-pill strong { font-weight: 650; }
+    .app-version {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 999px;
+      padding: 8px 11px;
+      color: rgba(255,255,255,.92);
+      background: rgba(255,255,255,.1);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #9ce2ae; box-shadow: 0 0 0 3px rgba(156,226,174,.15); }
     .status-pill.offline .status-dot { background: #ffd28a; box-shadow: 0 0 0 3px rgba(255,210,138,.15); }
     .status-pill.error .status-dot { background: #ffaaa2; box-shadow: 0 0 0 3px rgba(255,170,162,.15); }
@@ -276,12 +289,19 @@
     .empty-copy { max-width: 310px; color: #8a9991; font-size: 12px; line-height: 1.75; }
     .summary-text { display: none; margin: 0; color: #293c32; font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
     .summary-text.visible { display: block; }
-    .summary-text h3 { margin: 17px 0 7px; color: #176545; font-size: 14px; line-height: 1.5; }
-    .summary-text h3:first-child { margin-top: 0; }
+    .summary-person { padding: 13px 0 2px; }
+    .summary-person + .summary-person { margin-top: 10px; border-top: 1px solid var(--line); }
+    .summary-person-title { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+    .summary-person-avatar { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; border-radius: 50%; color: var(--green); background: var(--green-soft); font-size: 12px; font-weight: 750; }
+    .summary-person-name { color: #314b3c; font-size: 13px; font-weight: 750; }
+    .summary-person-body { padding-left: 39px; }
     .summary-text p { margin: 6px 0 10px; }
-    .summary-text ul, .summary-text ol { margin: 5px 0 13px; padding-left: 22px; }
+    .summary-text ul, .summary-text ol { margin: 4px 0 10px; padding-left: 18px; }
     .summary-text li { margin: 4px 0; padding-left: 2px; }
+    .summary-text .summary-speaker { color: #176545; font-weight: 700; }
     .summary-text blockquote { margin: 7px 0; border-left: 3px solid #c4ddcc; padding: 3px 10px; color: #718178; }
+    .speaker-warning { display: none; margin-top: 14px; border: 1px solid #f0dfb9; border-radius: 9px; padding: 9px 11px; color: #806020; background: #fffaf0; font-size: 11px; line-height: 1.65; }
+    .speaker-warning.visible { display: block; }
     .summary-table { width: 100%; margin: 9px 0 14px; border-collapse: collapse; font-size: 12px; }
     .summary-table th, .summary-table td { border: 1px solid #e4ece6; padding: 7px 9px; text-align: left; vertical-align: top; }
     .summary-table th { color: #3e594a; background: #f4f8f5; font-weight: 700; }
@@ -311,13 +331,14 @@
     }
     @media (max-width: 560px) {
       .shell { padding: 12px; }
-      .hero { min-height: 125px; padding: 20px 18px; border-radius: 15px; }
+      .hero { min-height: 125px; align-items: flex-start; flex-direction: column; gap: 14px; padding: 20px 18px; border-radius: 15px; }
       .brand { gap: 12px; }
       .brand-mark { width: 46px; height: 46px; border-radius: 13px; }
       h1 { font-size: 20px; }
       .subtitle { max-width: 230px; font-size: 11px; line-height: 1.5; }
-      .hero-side { gap: 6px; }
-      .engine-pill, .status-pill { padding: 7px 9px; font-size: 10px; }
+      .hero-side { justify-items: start; gap: 6px; }
+      .hero-chips { justify-content: flex-start; }
+      .engine-pill, .status-pill, .app-version { padding: 7px 9px; font-size: 10px; }
       .setup-card { padding: 18px 16px; }
       .range-calendar { padding: 13px; }
       .calendar-head { align-items: flex-start; }
@@ -350,7 +371,10 @@
         </div>
       </div>
       <div class="hero-side">
-        <div class="engine-pill"><span aria-hidden="true">✦</span><strong>Codex 智慧摘要</strong></div>
+        <div class="hero-chips">
+          <div class="engine-pill"><span aria-hidden="true">✦</span><strong>Codex 智慧摘要</strong></div>
+          <div class="app-version" id="appVersion" role="status" aria-live="polite" aria-label="程式版本確認中">版本確認中</div>
+        </div>
         <div class="status-pill offline" id="codexStatus"><span class="status-dot"></span><span id="codexStatusText">正在確認 Codex…</span></div>
       </div>
     </header>
@@ -461,6 +485,7 @@
             <div class="empty-copy">選擇 LINE 群組與時間範圍，這裡會顯示幾個簡短重點。</div>
           </div>
           <div class="summary-text" id="summaryText"></div>
+          <div class="speaker-warning" id="speakerWarning" role="status" aria-live="polite"></div>
           <div class="summary-meta" id="summaryMeta"></div>
         </div>
       </section>
@@ -737,10 +762,30 @@
         if (!response.ok && !data.error) data.error = '本機服務發生錯誤。';
         return { response: response, data: data };
       }
+      async function loadAppVersion() {
+        const badge = $('appVersion');
+        if (!apiAvailable) {
+          badge.textContent = 'HTML 預覽';
+          badge.setAttribute('aria-label', 'HTML 預覽，未連接本機服務');
+          return;
+        }
+        try {
+          const result = await api('/api/health');
+          const versionMatch = String(result.data && result.data.version || '').match(/^(\d+\.\d+\.\d+)(?:-[A-Za-z0-9.-]+)?$/);
+          if (!result.data.ok || !versionMatch) throw new Error('無法確認版本');
+          badge.textContent = 'v' + versionMatch[1];
+          badge.setAttribute('aria-label', '本機服務版本 ' + versionMatch[1]);
+        } catch (_) {
+          badge.textContent = '版本未知';
+          badge.setAttribute('aria-label', '無法連線本機服務以確認版本');
+        }
+      }
       function renderSummary(text, host) {
         host.replaceChildren();
         let list = null;
         let table = null;
+        let speakerBody = null;
+        function appendTarget() { return speakerBody || host; }
         text.split(/\r?\n/).forEach(function (line) {
           const trimmed = line.trim();
           if (!trimmed) {
@@ -752,9 +797,25 @@
           if (heading) {
             list = null;
             table = null;
-            const element = document.createElement('h3');
-            element.textContent = heading[1];
-            host.appendChild(element);
+            const name = heading[1].trim();
+            const section = document.createElement('section');
+            section.className = 'summary-person';
+            const title = document.createElement('div');
+            title.className = 'summary-person-title';
+            const avatar = document.createElement('span');
+            avatar.className = 'summary-person-avatar';
+            avatar.setAttribute('aria-hidden', 'true');
+            avatar.textContent = Array.from(name)[0] || '成';
+            const label = document.createElement('strong');
+            label.className = 'summary-person-name';
+            label.textContent = name;
+            title.appendChild(avatar);
+            title.appendChild(label);
+            speakerBody = document.createElement('div');
+            speakerBody.className = 'summary-person-body';
+            section.appendChild(title);
+            section.appendChild(speakerBody);
+            host.appendChild(section);
             return;
           }
           if (trimmed.charAt(0) === '|' && trimmed.slice(-1) === '|') {
@@ -764,7 +825,7 @@
             if (!table) {
               table = document.createElement('table');
               table.className = 'summary-table';
-              host.appendChild(table);
+              appendTarget().appendChild(table);
             }
             const row = document.createElement('tr');
             cells.forEach(function (cell) {
@@ -782,10 +843,11 @@
             const type = bullet ? 'ul' : 'ol';
             if (!list || list.tagName.toLowerCase() !== type) {
               list = document.createElement(type);
-              host.appendChild(list);
+              appendTarget().appendChild(list);
             }
             const item = document.createElement('li');
-            item.textContent = (bullet || numbered)[1];
+            const content = (bullet || numbered)[1];
+            item.textContent = content;
             list.appendChild(item);
             return;
           }
@@ -793,12 +855,12 @@
           if (trimmed.charAt(0) === '>') {
             const quote = document.createElement('blockquote');
             quote.textContent = trimmed.slice(1).trim();
-            host.appendChild(quote);
+            appendTarget().appendChild(quote);
             return;
           }
           const paragraph = document.createElement('p');
           paragraph.textContent = trimmed;
-          host.appendChild(paragraph);
+          appendTarget().appendChild(paragraph);
         });
       }
       async function loadStatus() {
@@ -937,7 +999,21 @@
         renderSummary(lastSummary, $('summaryText'));
         $('summaryText').classList.add('visible');
         $('copyButton').classList.add('visible');
-        $('resultSubheading').textContent = '聊天大意已整理 · 參考 ' + data.count + ' 則訊息';
+        const speakerStats = data.speakerStats || null;
+        const unresolvedSenders = speakerStats ? Number(speakerStats.unresolvedUniqueSenders || 0) : 0;
+        const unresolvedMessages = speakerStats ? Number(speakerStats.unresolvedMessages || speakerStats.missingSenderName || 0) : 0;
+        const warning = $('speakerWarning');
+        if (unresolvedSenders > 0) {
+          warning.textContent = unresolvedSenders + ' 位發言者（' + unresolvedMessages + ' 則訊息）未能從 LINE 資料對應到姓名；摘要已按不同發言者分開標示為「未對應姓名 A、B…」。請查看下方各人的區塊。';
+          warning.classList.add('visible');
+        } else if (unresolvedMessages > 0) {
+          warning.textContent = unresolvedMessages + ' 則訊息沒有可用的發言者姓名，來源資料不足以按姓名分類；請使用包含發言者名稱的 LINE 聊天 TXT 匯入。';
+          warning.classList.add('visible');
+        } else {
+          warning.textContent = '';
+          warning.classList.remove('visible');
+        }
+        $('resultSubheading').textContent = '依發言者分組整理 · 參考 ' + data.count + ' 則訊息';
         const meta = $('summaryMeta');
         meta.innerHTML = '';
         [data.groupName, data.count + ' 則訊息', data.start + ' 至 ' + data.end]
@@ -987,7 +1063,16 @@
             throw new Error(result.data.error || '摘要未完成。');
           }
           displaySummary(result.data);
-          setStatus(importedTranscript ? '摘要完成。匯入檔只使用暫存副本，原始檔未修改。' : '摘要完成；LINE 本機資料未修改。', 'success');
+          const completionStats = result.data.speakerStats || {};
+          const unresolvedSenders = Number(completionStats.unresolvedUniqueSenders || 0);
+          const unresolvedMessages = Number(completionStats.unresolvedMessages || completionStats.missingSenderName || 0);
+          const hasMissingAttribution = unresolvedSenders > 0 || unresolvedMessages > 0;
+          const completionMessage = unresolvedSenders > 0
+            ? '摘要完成，已依發言者分組；有 ' + unresolvedSenders + ' 位成員的姓名仍無法對照，請查看摘要中的提示與日誌。'
+            : (unresolvedMessages > 0
+              ? '摘要完成，但有 ' + unresolvedMessages + ' 則訊息沒有發言者姓名，無法依姓名分類。'
+              : (importedTranscript ? '摘要完成。匯入檔只使用暫存副本，原始檔未修改。' : '摘要完成；已依發言者分組，LINE 本機資料未修改。'));
+          setStatus(completionMessage, hasMissingAttribution ? '' : 'success');
         } catch (error) {
           $('resultSubheading').textContent = '摘要尚未完成';
           setStatus(error.message, 'error');
@@ -1058,12 +1143,26 @@
       rangeStart = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate());
       calendarView = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
       renderCalendar();
+      loadAppVersion();
       if (apiAvailable) {
+        const browserSessionId = window.crypto && typeof window.crypto.randomUUID === 'function'
+          ? window.crypto.randomUUID()
+          : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
+        function sendBrowserHeartbeat() {
+          fetch('/api/heartbeat?sessionId=' + encodeURIComponent(browserSessionId), { method: 'POST', cache: 'no-store', keepalive: true }).catch(function () { });
+        }
+        function announceBrowserPageClosed(event) {
+          if (event && event.persisted) return;
+          const url = '/api/page-close?sessionId=' + encodeURIComponent(browserSessionId);
+          if (navigator.sendBeacon) navigator.sendBeacon(url, new Blob([], { type: 'application/octet-stream' }));
+          else fetch(url, { method: 'POST', cache: 'no-store', keepalive: true }).catch(function () { });
+        }
+        sendBrowserHeartbeat();
+        window.addEventListener('pagehide', announceBrowserPageClosed);
+        window.addEventListener('pageshow', sendBrowserHeartbeat);
         loadStatus();
         loadGroupsAutomatically();
-        setInterval(function () {
-          fetch('/api/heartbeat', { method: 'POST', cache: 'no-store' }).catch(function () { });
-        }, 25000);
+        setInterval(sendBrowserHeartbeat, 15000);
       } else {
         loadStatus();
       }

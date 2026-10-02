@@ -11,8 +11,9 @@ using System.Windows.Forms;
 
 internal static class Launcher
 {
-    private const int Port = 48745;
-    private const string AppUrl = "http://127.0.0.1:48745/";
+    private const int Port = 48753;
+    private const string AppUrl = "http://127.0.0.1:48753/";
+    private const string ExpectedServerVersion = "2.6.12";
     private const string RuntimeVersion = "better-sqlite3-multiple-ciphers@13.0.3";
 
     [STAThread]
@@ -136,7 +137,12 @@ internal static class Launcher
             request.Timeout = 700;
             request.ReadWriteTimeout = 700;
             using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                return response.StatusCode == HttpStatusCode.OK;
+            using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+            {
+                string payload = reader.ReadToEnd();
+                return response.StatusCode == HttpStatusCode.OK &&
+                    payload.IndexOf("\"version\":\"" + ExpectedServerVersion + "\"", StringComparison.Ordinal) >= 0;
+            }
         }
         catch
         {

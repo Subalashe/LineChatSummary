@@ -1444,7 +1444,10 @@ function Split-TranscriptSenderBody {
     } elseif ($Rest -match '^\s*(?<sender>[^:：]{1,40})[:：]\s+(?<body>.*)$') {
         $sender = $Matches.sender.Trim()
         $body = $Matches.body
-    } elseif ($Rest -match '^\s*(?<sender>\S.{0,38}?)\s{2,}(?<body>.*)$') {
+    } elseif ($Rest -match '^\s*(?<sender>[^\s]{1,40})[\t \u3000]+(?<body>.*)$') {
+        # LINE Windows exports commonly separate timestamp, sender, and message
+        # with single spaces. Treat the first token as the sender; otherwise the
+        # entire message may be misclassified as a sender (or left unattributed).
         $sender = $Matches.sender.Trim()
         $body = $Matches.body
     }
@@ -1559,11 +1562,15 @@ function Format-MessagesForAI {
     foreach ($message in $Messages) {
         $body = [string]$message.Body
         if ($Redact) { $body = Remove-CommonPII $body }
+        $body = $body -replace '[\r\n]+', ' '
         $sender = [string]$message.Sender
         if ($Redact) { $sender = Remove-CommonPII $sender }
         $prefix = '[{0}]' -f $message.Timestamp.ToString('yyyy-MM-dd HH:mm:ss')
-        if (-not [string]::IsNullOrWhiteSpace($sender)) { $prefix += ' ' + $sender + ':' }
-        $lines.Add($prefix + ' ' + $body)
+        if (-not [string]::IsNullOrWhiteSpace($sender)) {
+            $lines.Add($prefix + ' 發言者：' + $sender + '｜訊息：' + $body)
+        } else {
+            $lines.Add($prefix + ' 訊息：' + $body)
+        }
     }
     return ($lines -join [Environment]::NewLine)
 }
@@ -1706,9 +1713,13 @@ function Invoke-ModePrepareSummary {
     }
     $formatStarted = Get-Date
     $formatted = Format-MessagesForAI -Messages $selected -Redact $true
+    $withSenderName = @($selected | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.Sender) }).Count
+    $missingSenderName = $selected.Count - $withSenderName
+    $uniqueSenders = @($selected | ForEach-Object { [string]$_.Sender } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique).Count
     $firstSelected = ($selected | Measure-Object -Property Timestamp -Minimum).Minimum
     $lastSelected = ($selected | Measure-Object -Property Timestamp -Maximum).Maximum
     Write-AppLog ('SummaryInputPrepared messages={0} transcriptBytes={1} chars={2} formatMs={3} totalMs={4}' -f $selected.Count, $sourceLength, $formatted.Length, [int](((Get-Date) - $formatStarted).TotalMilliseconds), [int](((Get-Date) - $prepareStarted).TotalMilliseconds))
+    Write-AppLog ('TranscriptSpeakerAttribution messages={0} uniqueSenders={1} withSenderName={2} missingSenderName={3}' -f $selected.Count, $uniqueSenders, $withSenderName, $missingSenderName)
     return [pscustomobject]@{
         ok = $true
         text = $formatted
@@ -1716,6 +1727,16 @@ function Invoke-ModePrepareSummary {
         groupName = $groupName
         start = $firstSelected.ToString('yyyy-MM-dd HH:mm')
         end = $lastSelected.ToString('yyyy-MM-dd HH:mm')
+        senderStats = [pscustomobject]@{
+            messages = $selected.Count
+            uniqueSenders = $uniqueSenders
+            resolvedUniqueSenders = $uniqueSenders
+            unresolvedUniqueSenders = 0
+            withSenderName = $withSenderName
+            missingSenderName = $missingSenderName
+            resolvedMessages = $withSenderName
+            unresolvedMessages = $missingSenderName
+        }
     }
 }
 

@@ -14,6 +14,9 @@ let activeDb = null;
 let activeDbPath = '';
 let activeLineVersion = '';
 let activeScanStats = { scannedProcessCount: 0, candidateCount: 0, databaseCount: 0, keyAttempts: 0 };
+let activeNameDbs = [];
+let activeSenderNames = new Map();
+let activeNameSources = [];
 let initialization = null;
 
 function getLocalAppData() {
@@ -51,6 +54,230 @@ function firstValue(row, names) {
 
 function asText(value) {
   return value === undefined || value === null ? '' : String(value);
+}
+
+const SENDER_ID_COLUMNS = [
+  '_mid', 'mid', '_memberMid', 'memberMid', '_groupMemberMid', 'groupMemberMid',
+  '_squareMemberMid', 'squareMemberMid', '_userMid', 'userMid', '_senderMid', 'senderMid',
+  '_contactMid', 'contactMid', '_profileMid', 'profileMid', '_participantMid', 'participantMid',
+  '_senderId', 'senderId', '_memberId', 'memberId', '_userId', 'userId',
+  '_contactId', 'contactId', '_profileId', 'profileId', '_participantId', 'participantId', '_id', 'id'
+];
+const SENDER_NAME_COLUMNS = [
+  '_displayName', 'displayName', '_memberName', 'memberName',
+  '_userName', 'userName', '_nickname', 'nickname', '_name', 'name', '_displayNameOverridden'
+];
+
+function isUsableSenderName(value) {
+  if (typeof value !== 'string') return false;
+  const text = String(value).trim();
+  return Boolean(text) && text.length <= 128 && !/^(?:0|1|true|false|null|undefined)$/i.test(text);
+}
+
+function senderColumnCandidates(columns, explicit, kind) {
+  const result = explicit.filter(name => columns.has(name));
+  for (const name of columns) {
+    const normalized = name.replace(/^_+/, '').replace(/_/g, '').toLowerCase();
+    if (kind === 'id') {
+      if (/^(?:id|mid|sender(?:mid|id)|chatmember(?:mid|id)|chatparticipant(?:mid|id)|groupmember(?:mid|id)|squaremember(?:mid|id)|member(?:mid|id)|participant(?:mid|id)|contact(?:mid|id)|profile(?:mid|id)|user(?:mid|id)|friend(?:mid|id)|peer(?:mid|id))$/.test(normalized)) result.push(name);
+    } else if (/(?:displayname|membername|username|contactname|profilename|participantname|nickname|nick|name)$/.test(normalized)) {
+      result.push(name);
+    }
+  }
+  return Array.from(new Set(result));
+}
+
+function addSenderNames(db, contacts, table, idColumns, nameColumns, overwrite) {
+  const tables = tableNames(db);
+  if (!tables.has(table)) return null;
+  const available = getColumns(db, table);
+  const ids = senderColumnCandidates(available, idColumns, 'id');
+  const names = senderColumnCandidates(available, nameColumns, 'name');
+  if (!ids.length || !names.length) return { table, ids, names, namedRows: 0, indexedNames: 0 };
+  let namedRows = 0;
+  let indexedNames = 0;
+  for (const row of readColumns(db, table, [...ids, ...names])) {
+    const keys = Array.from(new Set(ids.map(column => asText(row[column]).trim()).filter(Boolean)));
+    const nameValue = names.map(column => row[column]).find(isUsableSenderName);
+    const name = asText(nameValue).trim();
+    if (!keys.length || !name) continue;
+    namedRows++;
+    for (const key of keys) {
+      if (overwrite || !contacts.has(key) || !contacts.get(key)) {
+        contacts.set(key, name);
+        indexedNames++;
+      }
+    }
+  }
+  return { table, ids, names, namedRows, indexedNames };
+}
+
+function profileNameFieldPriority(key) {
+  const normalized = String(key || '').replace(/^_+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  if (/^(?:displaynameoverridden|overriddendisplayname|displayname)$/.test(normalized)) return 100;
+  if (/^(?:nickname|nick|profilename|contactname|membername|participantname|friendname|targetname)$/.test(normalized)) return 80;
+  if (/^(?:name)$/.test(normalized)) return 70;
+  if (/(?:displayname|nickname|contactname|membername|participantname|friendname|targetname|profilename)$/.test(normalized)) return 60;
+  return 0;
+}
+
+function isPlausibleProfileName(value, explicitField) {
+  if (typeof value !== 'string') return false;
+  const text = value.normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text || text.length > (explicitField ? 128 : 40)) return false;
+  if (/^(?:0|1|true|false|null|undefined|unknown|none|n\/a)$/i.test(text)) return false;
+  if (/^(?:https?:\/\/|www\.)/i.test(text) || /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(text)) return false;
+  if (/^(?:\+?\d[\d ()-]{6,}\d|\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:[ T].*)?)$/.test(text)) return false;
+  if (!/[\p{L}\p{N}]/u.test(text)) return false;
+  if (!explicitField && /[，。！？!?；;：:\r\n]/.test(text)) return false;
+  return true;
+}
+
+function extractTargetProfileName(rawValue) {
+  let root = rawValue;
+  if (Buffer.isBuffer(root)) {
+    if (!root.length || root.length > 262144) return '';
+    root = root.toString('utf8');
+  }
+  if (typeof root === 'string') {
+    const text = root.trim();
+    if (!text || text.length > 262144) return '';
+    try { root = JSON.parse(text); }
+    catch (_) { return ''; }
+  }
+  if (!root || typeof root !== 'object') return '';
+
+  const named = [];
+  const fallback = [];
+  let visited = 0;
+  const addCandidate = (target, value, priority) => {
+    if (!isPlausibleProfileName(value, priority > 0)) return;
+    const name = value.normalize('NFKC').replace(/\s+/g, ' ').trim();
+    target.push({ name, priority });
+  };
+  const visit = (value, depth, inheritedPriority) => {
+    if (depth > 12 || ++visited > 5000 || value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      const text = value.trim();
+      if (text.length <= 262144 && /^[\[{\"]/.test(text)) {
+        try {
+          const nested = JSON.parse(text);
+          if (nested && typeof nested === 'object') {
+            visit(nested, depth + 1, inheritedPriority);
+            return;
+          }
+        } catch (_) { }
+      }
+      addCandidate(inheritedPriority > 0 ? named : fallback, value, inheritedPriority);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1, inheritedPriority);
+      return;
+    }
+    if (typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      const priority = profileNameFieldPriority(key) || inheritedPriority;
+      visit(child, depth + 1, priority);
+    }
+  };
+  visit(root, 0, 0);
+
+  const uniqueByName = candidates => {
+    const unique = new Map();
+    for (const candidate of candidates) {
+      const key = candidate.name.toLocaleLowerCase('en-US');
+      const current = unique.get(key);
+      if (!current || candidate.priority > current.priority) unique.set(key, candidate);
+    }
+    return Array.from(unique.values());
+  };
+  const explicitNames = uniqueByName(named).sort((a, b) => b.priority - a.priority);
+  if (explicitNames.length) return explicitNames[0].name;
+  const fallbackNames = uniqueByName(fallback);
+  return fallbackNames.length === 1 ? fallbackNames[0].name : '';
+}
+
+function addContactTargetProfileNames(db, contacts) {
+  const table = '_contact';
+  if (!tableNames(db).has(table)) return null;
+  const columns = getColumns(db, table);
+  if (!columns.has('_mid') || !columns.has('_targetProfileDetail')) return null;
+
+  let rowsWithProfile = 0;
+  let namedRows = 0;
+  let indexedNames = 0;
+  for (const row of readColumns(db, table, ['_mid', '_targetProfileDetail'])) {
+    const mid = asText(row._mid).trim();
+    if (!mid || row._targetProfileDetail === null || row._targetProfileDetail === undefined) continue;
+    rowsWithProfile++;
+    const name = extractTargetProfileName(row._targetProfileDetail);
+    if (!name) continue;
+    namedRows++;
+    // The profile detail belongs to this contact row; link it only through that row's LINE MID.
+    if (!contacts.get(mid)) {
+      contacts.set(mid, name);
+      indexedNames++;
+    }
+  }
+  return {
+    table,
+    ids: ['_mid'],
+    names: ['_targetProfileDetail'],
+    namedRows,
+    indexedNames,
+    profileRows: rowsWithProfile
+  };
+}
+
+function addNamesFromOtherMemberTables(db, contacts, excludedTables) {
+  const sources = [];
+  for (const table of tableNames(db)) {
+    if (excludedTables.has(table) || !/(contact|profile|member|participant|user|group|room|square|friend|buddy|peer)/i.test(table)) continue;
+    const available = getColumns(db, table);
+    const ids = senderColumnCandidates(available, SENDER_ID_COLUMNS, 'id');
+    const names = senderColumnCandidates(available, SENDER_NAME_COLUMNS, 'name');
+    if (!ids.length || !names.length) continue;
+    sources.push(addSenderNames(db, contacts, table, ids, names, false));
+  }
+  return sources.filter(Boolean);
+}
+
+function buildSenderNameIndex(databases) {
+  const contacts = new Map();
+  const sources = [];
+  const addSource = (db, databaseIndex, table, ids, names) => {
+    const source = addSenderNames(db, contacts, table, ids, names, false);
+    if (source) {
+      source.databaseIndex = databaseIndex;
+      sources.push(source);
+    }
+  };
+  const explicitSources = [
+    ['_contact', ['_mid', '_id'], ['_displayNameOverridden', '_displayName', '_name']],
+    ['_profile', ['_mid'], ['_displayNameOverridden', '_displayName', '_name', '_nickname']],
+    ['_groupMember', ['_memberMid', '_mid', '_groupMemberMid'], ['_displayNameOverridden', '_displayName', '_name', '_nickname']],
+    ['_roomMember', ['_memberMid', '_mid', '_roomMemberMid'], ['_displayNameOverridden', '_displayName', '_name', '_nickname']],
+    ['_squareMember', ['_squareMemberMid', '_mid'], ['_displayNameOverridden', '_displayName', '_name', '_nickname']]
+  ];
+  for (const [table, ids, names] of explicitSources) {
+    for (let index = 0; index < databases.length; index++) addSource(databases[index], index, table, ids, names);
+  }
+  for (let index = 0; index < databases.length; index++) {
+    const source = addContactTargetProfileNames(databases[index], contacts);
+    if (source) {
+      source.databaseIndex = index;
+      sources.push(source);
+    }
+  }
+  const excludedTables = new Set(explicitSources.map(source => source[0]));
+  for (let index = 0; index < databases.length; index++) {
+    for (const source of addNamesFromOtherMemberTables(databases[index], contacts, excludedTables)) {
+      source.databaseIndex = index;
+      sources.push(source);
+    }
+  }
+  return { contacts, sources };
 }
 
 function makeChatList(db) {
@@ -144,7 +371,7 @@ function toTaipeiTimestamp(value, isEnd) {
   return timestamp;
 }
 
-function newEncryptedConnection(dbPath, keyText) {
+function openEncryptedDatabase(dbPath, keyText, requireMessages) {
   let db = null;
   const keyBytes = Buffer.from(keyText, 'ascii');
   try {
@@ -153,7 +380,7 @@ function newEncryptedConnection(dbPath, keyText) {
     db.key(keyBytes);
     db.pragma('query_only = ON');
     const names = tableNames(db);
-    if (!names.has('_chat') || !names.has('_message')) throw new Error('資料表驗證失敗');
+    if (requireMessages && (!names.has('_chat') || !names.has('_message'))) throw new Error('資料表驗證失敗');
     return db;
   } catch (error) {
     if (db) { try { db.close(); } catch (_) { } }
@@ -161,6 +388,10 @@ function newEncryptedConnection(dbPath, keyText) {
   } finally {
     keyBytes.fill(0);
   }
+}
+
+function newEncryptedConnection(dbPath, keyText) {
+  return openEncryptedDatabase(dbPath, keyText, true);
 }
 
 async function ensureReady(scanMemory) {
@@ -203,6 +434,7 @@ async function ensureReady(scanMemory) {
     let matched = false;
     let keyAttempts = 0;
     let databaseAttempts = 0;
+    let matchedKey = '';
     const unlockStarted = Date.now();
     let unlockMs = 0;
     const existingPaths = paths.filter(dbPath => fs.existsSync(dbPath));
@@ -219,6 +451,7 @@ async function ensureReady(scanMemory) {
             activeDb = newEncryptedConnection(dbPath, keyText);
             activeDbPath = dbPath;
             activeLineVersion = String(discovery.lineVersion || '');
+            matchedKey = keyText;
             matched = true;
             break;
           } catch (_) {
@@ -246,6 +479,18 @@ async function ensureReady(scanMemory) {
       };
       throw error;
     }
+    activeNameDbs = [activeDb];
+    if (matchedKey) {
+      for (const dbPath of existingPaths) {
+        if (dbPath === activeDbPath) continue;
+        try { activeNameDbs.push(openEncryptedDatabase(dbPath, matchedKey, false)); }
+        catch (_) { /* Other LINE files may use another key or a different data format. */ }
+      }
+      matchedKey = '';
+    }
+    const senderNameIndex = buildSenderNameIndex(activeNameDbs);
+    activeSenderNames = senderNameIndex.contacts;
+    activeNameSources = senderNameIndex.sources;
     activeScanStats = {
       scannedProcessCount: Number(discovery.scannedProcessCount || 0),
       candidateCount,
@@ -275,10 +520,16 @@ function clearDiscovery(discovery) {
 }
 
 function reset() {
+  for (const db of activeNameDbs) {
+    if (db && db !== activeDb) { try { db.close(); } catch (_) { } }
+  }
   if (activeDb) { try { activeDb.close(); } catch (_) { } }
   activeDb = null;
   activeDbPath = '';
   activeLineVersion = '';
+  activeNameDbs = [];
+  activeSenderNames = new Map();
+  activeNameSources = [];
   activeScanStats = { scannedProcessCount: 0, candidateCount: 0, databaseCount: 0, keyAttempts: 0 };
   initialization = null;
 }
@@ -314,7 +565,16 @@ function getMessages(chatId, start, end) {
   const count = Number(activeDb.prepare(
     'SELECT COUNT(*) AS count FROM _message WHERE _chatId = ? AND _createdTime >= ? AND _createdTime <= ?'
   ).get(id, storedFrom, storedUntil).count || 0);
-  if (!count) return { count: 0, total: 0, text: '' };
+  if (!count) return {
+    count: 0,
+    total: 0,
+    text: '',
+    senderStats: {
+      messages: 0, messagesWithSenderId: 0, selfMessages: 0,
+      uniqueSenders: 0, resolvedUniqueSenders: 0, unresolvedUniqueSenders: 0,
+      resolvedMessages: 0, unresolvedMessages: 0
+    }
+  };
   if (count > MAX_MESSAGES) throw new Error('這個日期範圍有 ' + count + ' 則訊息，請縮短時間範圍後再摘要（單次上限 ' + MAX_MESSAGES + ' 則）。');
 
   const messageFields = ['_createdTime', '_from', '_text'];
@@ -323,32 +583,63 @@ function getMessages(chatId, start, end) {
   const rows = activeDb.prepare(
     'SELECT ' + messageFieldSql + ' FROM _message WHERE _chatId = ? AND _createdTime >= ? AND _createdTime <= ? ORDER BY _createdTime ASC LIMIT ?'
   ).all(id, storedFrom, storedUntil, MAX_MESSAGES);
-  const contacts = new Map();
-  const tables = tableNames(activeDb);
-  if (tables.has('_contact')) {
-    for (const row of readColumns(activeDb, '_contact', ['_mid', '_id', '_displayNameOverridden', '_displayName', '_name'])) {
-      const key = asText(firstValue(row, ['_mid', '_id']));
-      if (key) contacts.set(key, asText(firstValue(row, ['_displayNameOverridden', '_displayName', '_name'])));
-    }
-  }
-  if (tables.has('_squareMember')) {
-    for (const row of readColumns(activeDb, '_squareMember', ['_squareMemberMid', '_mid', '_displayName', '_name'])) {
-      const key = asText(firstValue(row, ['_squareMemberMid', '_mid']));
-      if (key && !contacts.has(key)) contacts.set(key, asText(firstValue(row, ['_displayName', '_name'])));
-    }
-  }
   const lines = [];
+  const senderIds = new Set();
+  const resolvedSenderIds = new Set();
+  const unresolvedSenderIds = new Set();
+  let selfMessages = 0;
+  let resolvedMessages = 0;
+  let unresolvedMessages = 0;
   for (const row of rows) {
     const time = toTaipeiDateTime(row._createdTime);
     const senderId = asText(row._from);
-    const sender = senderId ? (contacts.get(senderId) || '群組成員') : '我';
+    let sender;
+    if (senderId) {
+      senderIds.add(senderId);
+      sender = activeSenderNames.get(senderId) || '';
+      if (sender) {
+        resolvedSenderIds.add(senderId);
+        resolvedMessages++;
+      } else {
+        unresolvedSenderIds.add(senderId);
+        unresolvedMessages++;
+        let aliasIndex = Array.from(unresolvedSenderIds).indexOf(senderId);
+        let alias = '';
+        do {
+          alias = String.fromCharCode(65 + (aliasIndex % 26));
+          aliasIndex = Math.floor(aliasIndex / 26) - 1;
+        } while (aliasIndex >= 0);
+        sender = '未對應姓名 ' + alias;
+      }
+    } else {
+      selfMessages++;
+      sender = '我';
+    }
     const contentType = Number(row._contentType || 0);
     const label = CONTENT_LABELS.get(contentType);
     const rawText = asText(row._text);
     const body = rawText.trim() || label || '[非文字訊息]';
-    lines.push('[' + time + '] ' + redactCommonData(sender) + ': ' + redactCommonData(body));
+    const safeSender = redactCommonData(sender).replace(/[\r\n]+/g, ' ');
+    const safeBody = redactCommonData(body).replace(/[\r\n]+/g, ' ');
+    lines.push('[' + time + '] 發言者：' + safeSender + '｜訊息：' + safeBody);
   }
-  return { count: rows.length, total: count, text: lines.join('\n') };
+  return {
+    count: rows.length,
+    total: count,
+    text: lines.join('\n'),
+    senderStats: {
+      messages: rows.length,
+      messagesWithSenderId: rows.length - selfMessages,
+      selfMessages,
+      uniqueSenders: senderIds.size,
+      resolvedUniqueSenders: resolvedSenderIds.size,
+      unresolvedUniqueSenders: unresolvedSenderIds.size,
+      resolvedMessages,
+      unresolvedMessages,
+      nameDatabaseCount: activeNameDbs.length,
+      nameSources: activeNameSources
+    }
+  };
 }
 
 module.exports = { ensureReady, reset, listGroups, getMessages };
